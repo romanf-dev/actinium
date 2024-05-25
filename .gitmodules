@@ -1,0 +1,3 @@
+[submodule "magnesium"]
+	path = magnesium
+	url = https://github.com/romanf-dev/magnesium
