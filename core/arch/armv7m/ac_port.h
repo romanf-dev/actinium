@@ -12,14 +12,14 @@
 #include "core_cmFunc.h"
 
 struct hal_frame_t {
-    uintptr_t r0;
-    uintptr_t r1;
-    uintptr_t r2;
-    uintptr_t r3;
-    uintptr_t r12;
-    uintptr_t lr;
-    uintptr_t pc;
-    uintptr_t xPSR;
+    uint32_t r0;
+    uint32_t r1;
+    uint32_t r2;
+    uint32_t r3;
+    uint32_t r12;
+    uint32_t lr;
+    uint32_t pc;
+    uint32_t xPSR;
 };
 
 static inline uintptr_t hal_frame_alloc(
@@ -34,7 +34,7 @@ static inline uintptr_t hal_frame_alloc(
     frame->r2 = 0;
     frame->r3 = 0;
     frame->r12 = 0;
-    frame->lr = (restart_marker == true ) ? 1 : 0;
+    frame->lr = restart_marker ? 1 : 0;
     frame->pc = func | 1;
     frame->xPSR = 1 << 24;
     return (uintptr_t)frame;
@@ -55,8 +55,11 @@ static inline void hal_intr_level(unsigned int level) {
 }
 
 enum {
-    AC_ATTR_RO = (6 << 24) | 1 << 17u | 1,
-    AC_ATTR_RW = (3 << 24) | 3 << 17u | 1,
+/*     name      |   XN    |  AP[2:0]  | S C B bits | ENABLED */
+    AC_ATTR_RO =             (6 << 24) | (2 << 16)  | 1,
+    AC_ATTR_RW = (1 << 28) | (3 << 24) | (6 << 16)  | 1,
+    AC_ATTR_XRW=             (3 << 24) | (6 << 16)  | 1,
+    AC_ATTR_DEV= (1 << 28) | (3 << 24) | (5 << 16)  | 1,
 };
 
 struct hal_mpu_region_t {
@@ -68,27 +71,26 @@ static inline void hal_mpu_region_init(
     struct hal_mpu_region_t* region, 
     uintptr_t addr, 
     size_t size,
-    bool writable
+    unsigned int attr
 ) {
-    const uint32_t size_mask = (_hal_order(size) - 1) << 1;
-    const uint32_t attr_mask = writable ? AC_ATTR_RW : AC_ATTR_RO;
+    const uint32_t size_mask = (_hal_order(size) - 1) << MPU_RASR_SIZE_Pos;
     region->addr = addr;
-    region->attr = size ? (size_mask | attr_mask) : 0;
+    region->attr = size ? (size_mask | attr) : 0;
 }
 
 static inline void hal_mpu_update_region(
     unsigned int i, 
     const struct hal_mpu_region_t* region
 ) {
-    MPU->RBAR = region->addr | (1 << 4) | i;
+    MPU->RBAR = region->addr | (1 << MPU_RBAR_VALID_Pos) | i;
     MPU->RASR = 0;
     MPU->RASR = region->attr;
 }
 
 static inline void hal_mpu_reset(void) {
-    MPU->RBAR = (1 << 4) | 0;
+    MPU->RBAR = (1 << MPU_RBAR_VALID_Pos);
     MPU->RASR = 0;
-    MPU->RASR = AC_ATTR_RW | (31 << 1);
+    MPU->RASR = AC_ATTR_XRW | (31 << MPU_RASR_SIZE_Pos);
 }
 
 static inline void hal_mpu_reprogram(

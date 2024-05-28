@@ -12,7 +12,7 @@
 struct led_msg_t {
     ac_message_t header;
     unsigned int control;
-    uint32_t padding[4];
+    uint8_t padding[32 - sizeof(ac_message_t) - sizeof(unsigned int)];
 };
 
 _Static_assert(

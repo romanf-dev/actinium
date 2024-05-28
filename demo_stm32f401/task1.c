@@ -19,7 +19,7 @@ uint32_t main(void) {
     AC_ACTOR_START;
     
     for (;;) {
-        AC_AWAIT(act_sleep_for(50));
+        AC_AWAIT(act_sleep_for(100));
 
         struct led_msg_t* msg = act_alloc(0);
         msg->control = (state ^= 1);

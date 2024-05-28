@@ -12,24 +12,24 @@
 .section .startup
 .type startup, %function
 startup:
-  teq lr, #0            /* Nonzero LR means 'cold restart' with bss reinit. */
-  beq task_run
-  ldr r1, =_sbss
-  ldr r2, =_ebss
-  movs r3, #0
-  b start_bss_init
+    teq lr, #0            /* Nonzero LR means 'cold restart' with bss reinit. */
+    beq task_run
+    ldr r1, =_sbss
+    ldr r2, =_ebss
+    movs r3, #0
+    b start_bss_init
 
 bss_zeroing:
-  str  r3, [r1]
-  adds r1, r1, #4
+    str  r3, [r1]
+    adds r1, r1, #4
 
 start_bss_init:
-  cmp r1, r2
-  bcc bss_zeroing
+    cmp r1, r2
+    bcc bss_zeroing
 
 task_run:
-  bl main
-  svc 0                 /* Task return value is the queue id. */
+    bl main
+    svc 0                 /* Task return value is the queue id. */
 
 .global _ac_syscall
 .section .text

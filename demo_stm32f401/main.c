@@ -59,7 +59,6 @@ void BusFault_Handler(void) {
     __set_PSP(frame);
 }
 
-static alignas(sizeof(struct led_msg_t)) struct led_msg_t g_storage[3];
 static struct ac_channel_t g_chan;
 static struct ac_message_pool_t g_pool;
 
@@ -67,19 +66,23 @@ struct ac_channel_t* ac_channel_validate(
     struct ac_actor_t* actor, 
     unsigned int handle
 ) {
-    return &g_chan;
+    return (handle == 0) ? &g_chan : 0;
 }
 
 struct ac_message_pool_t* ac_pool_validate(
     struct ac_actor_t* actor, 
     unsigned int handle
 ) {
-    return &g_pool;
+    return (handle == 0) ? &g_pool : 0;
 }
 
 int main(void) {
     static struct ac_actor_t g_handler;
     static struct ac_actor_t g_sender;
+    static alignas(1024) uint32_t stack0[1024 / sizeof(uint32_t)];
+    static alignas(sizeof(struct led_msg_t)) struct led_msg_t g_storage[3];
+
+    /* setup clocks and other hardware stuff... */
 
     RCC->CR |= RCC_CR_HSEON;            
     while((RCC->CR & RCC_CR_HSERDY) == 0) {
@@ -103,36 +106,44 @@ int main(void) {
 
     RCC->CR &= ~RCC_CR_HSION;
 
+    /* enable LED */
     RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
     GPIOC->MODER |= GPIO_MODER_MODER13_0;
 
+    /* enable all exceptions */
     SCB->SHCSR |= ( 7 << 16 );
     
-    MPU->RNR = 0;
-    MPU->RBAR = 0;
-    MPU->RASR = (3 << 24) | (31 << 1) | 1 | 3 << 17u;
+    /* enable MPU with default memory map */
     MPU->CTRL = MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_ENABLE_Msk;
     __DSB();
     __ISB();
     
+    /* both actors share the same priority so there's only one stack */
     ac_context_init();
-    g_ac_context.stacks[0].addr = 0x2000ec00;
-    g_ac_context.stacks[0].size = 1024;
+    g_ac_context.stacks[0].addr = (uintptr_t)stack0;
+    g_ac_context.stacks[0].size = sizeof(stack0);
 
     ac_message_pool_init(&g_pool, g_storage, sizeof(g_storage), sizeof(g_storage[0]), 1);
     ac_channel_init(&g_chan, 1);
 
+    /* this chip has 4 priority bits, subpriority is 3:0 */
     NVIC_SetPriorityGrouping(3);
+
+    /* enable two first vectors and set priotity 1, the maximum priority for 
+    unprivileged actors */
     NVIC_SetPriority(0, 1);
     NVIC_SetPriority(1, 1);
     NVIC_EnableIRQ(0);
     NVIC_EnableIRQ(1);
 
+    /* create 'controller' actor and allow to access GPIOC */
     ac_actor_init(&g_handler, 0, 0);
-    hal_mpu_region_init(&g_handler.granted[AC_REGION_USER], 0x40020800, 1024, true);
+    hal_mpu_region_init(&g_handler.granted[AC_REGION_USER], GPIOC_BASE, 64, AC_ATTR_DEV);
 
+    /* create 'sender actor '*/
     ac_actor_init(&g_sender, 1, 1);
 
+    /* initialize tick source for 1 ms */
     SysTick->LOAD  = 84000U - 1U;
     SysTick->VAL   = 0;
     SysTick->CTRL  = 7;

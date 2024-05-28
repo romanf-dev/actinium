@@ -89,6 +89,7 @@ extern struct ac_context_t g_ac_context;
 
 static inline void ac_context_init(void) {
     mg_context_init();
+    hal_mpu_reset();
     hal_intr_level(1); /* max possible level for unprivileged actors */
 }
 
@@ -120,7 +121,7 @@ static inline void _ac_message_set(struct ac_actor_t* actor) {
         actor->msg.type = parent->msg_type;
         actor->msg.size = parent->base.block_sz;
         msg->parent = 0;
-        hal_mpu_region_init(region, (uintptr_t)msg, actor->msg.size, true);
+        hal_mpu_region_init(region, (uintptr_t)msg, actor->msg.size, AC_ATTR_RW);
     }
 }
 
@@ -132,7 +133,7 @@ static inline void _ac_message_cleanup(struct ac_actor_t* actor) {
     actor->msg.parent = 0;
     actor->msg.type = 0;
     actor->msg.size = 0;
-    hal_mpu_region_init(&actor->granted[AC_REGION_MSG], 0, 0, false);
+    hal_mpu_region_init(&actor->granted[AC_REGION_MSG], 0, 0, AC_ATTR_RW);
 }
 
 static inline void _ac_message_release(struct ac_actor_t* actor) {
@@ -148,7 +149,7 @@ static inline void _ac_channel_push(
     struct ac_actor_t* src, 
     struct ac_channel_t* dst
 ) {
-    ac_message_t* msg = src->base.mailbox;
+    ac_message_t* const msg = src->base.mailbox;
 
     if (msg) {
         if (src->msg.type == dst->msg_type) { /* typechecking */
@@ -161,7 +162,7 @@ static inline void _ac_channel_push(
 static inline void ac_actor_init(
     struct ac_actor_t* actor, 
     unsigned int vect,
-    unsigned int id
+    unsigned int task_id
 ) {
     struct ac_context_t* context = AC_GET_CONTEXT();
     const uintptr_t* const config = (const uintptr_t*) &_ac_task_mem_map;
@@ -173,10 +174,10 @@ static inline void ac_actor_init(
         uint32_t sram_size;
     } * const slot = (void*) (config + 1);
 
-    _Static_assert(sizeof(*slot) == sizeof(uint32_t) * 4, "");
+    _Static_assert(sizeof(*slot) == sizeof(uint32_t) * 4, "wrong slot type");
 
-    mg_actor_init(&actor->base, 0, vect, 0);
-    actor->func = slot[id].flash_addr;
+    mg_actor_init(&actor->base, 0, vect, 0); /* zero func means usermode. */
+    actor->func = slot[task_id].flash_addr;
     actor->restart_req = true;
     actor->msg.parent = 0;
     actor->msg.size = 0;
@@ -186,24 +187,24 @@ static inline void ac_actor_init(
 
     hal_mpu_region_init(
         &region[AC_REGION_FLASH], 
-        slot[id].flash_addr, 
-        slot[id].flash_size, 
-        false
+        slot[task_id].flash_addr, 
+        slot[task_id].flash_size, 
+        AC_ATTR_RO
     );
     hal_mpu_region_init(
         &region[AC_REGION_SRAM], 
-        slot[id].sram_addr, 
-        slot[id].sram_size, 
-        true
+        slot[task_id].sram_addr, 
+        slot[task_id].sram_size, 
+        AC_ATTR_RW
     );
     hal_mpu_region_init(
         &region[AC_REGION_STACK], 
         context->stacks[prio].addr, 
         context->stacks[prio].size, 
-        true
+        AC_ATTR_RW
     );
 
-    hal_mpu_region_init(&region[AC_REGION_MSG], 0, 0, true);
+    hal_mpu_region_init(&region[AC_REGION_MSG], 0, 0, AC_ATTR_RW);
     _mg_actor_activate(&actor->base);
 }
 
@@ -214,20 +215,20 @@ static inline uintptr_t _ac_actor_create_frame(struct ac_actor_t* actor) {
     const uintptr_t size = context->stacks[prio].size;
     const uintptr_t stack_top = base + size;
     const bool restart_req = actor->restart_req;
-    actor->restart_req = 0;
+    actor->restart_req = false;
 
     return hal_frame_alloc(stack_top, actor->func, 0, restart_req);
 }
 
 static inline uintptr_t _ac_intr_handler(uint32_t vect, uintptr_t old_frame) {
-    struct ac_context_t* context = AC_GET_CONTEXT();
+    struct ac_context_t* const context = AC_GET_CONTEXT();
     uintptr_t frame = old_frame;
 
     for (;;) {
         bool last = false;
         struct mg_actor_t* const next = _mg_context_pop_head(vect, &last);
         
-        if (!next) { 
+        if (!next) {
             break; 
         }
 
@@ -436,4 +437,3 @@ static inline void act_free(void) {
 #define AC_AWAIT(q) _ac_state = __LINE__; return (q); case __LINE__:
 
 #endif
-
