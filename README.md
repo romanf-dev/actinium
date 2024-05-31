@@ -9,15 +9,44 @@ research and experiments. This readme is also incomplete and will be updated
 over time...
 
 
+Architecture
+------------
+
+![architecture](doc/img/arch.png)
+
+Executable image consists of number of task and a core containing system
+services. Each task contains exactly one actor which is a run-to-completion
+stackless coroutine. Actors communicate using channels and messages.
+Each task runs in memory-protected domain and have no direct access to 
+neither core nor peripherals. It is assumed that executable image is 
+deployed as a whole, so tasks can't be created or destroyed at runtime.
+
+Each task is assigned a fixed priority and each priority corresponds to
+some (unused by the user application) interrupt vector. This approach 
+allows to use interrupt controller as a hardware-implemented scheduler.
+
+For example, figure below depicts three vectors assigned to three runqueues.
+
+![vectors](doc/img/vectors.png)
+
+Note that vector is assigned to priority level, not actor. So number of
+vectors that have to be reserved for scheduling is always finite and limited,
+whereas number of tasks/actors is unlimited.
+
+Most Cortex-M chips define 'priority bits' for NVIC as 3-5, so number 
+of distinct priority levels is 8-32.
+Other vectors unused by scheduling behave as expected and are not used by the
+framework in any way.
+
+
 Features
 --------
 
-- Preemptive multitasking (number of priority levels is defined by hardware)
+- Preemptive multitasking
 - Cooperative scheduling within a single priority level
 - Actors are separately compiled and run in unprivileged mode
 - Region-based memory protection using MPU
 - Message passing IPC
-- Actors (or tasks) can't be created or destroyed at runtime
 - Timer services with 'sleep for' functionality
 - Only ARM Cortex-M3/M4 (with MPU) are supported at now
 
@@ -86,13 +115,24 @@ Currently, 5 regions are used for each unprivileged actor.
 - Currently owned message (optional)
 - ‘User’ region for peripheral access (optional)
 
+I plan to remove restrictions and allow to set the number of regions per 
+actor individually but this is not implemented yet.
+
 Because of hardware restrictions of the MPU, messages should be:
 - at least 32 bytes size
 - aligned to its size
 - sized to power of 2
 
-I plan to remove restrictions and allow to set the number of regions per 
-actor individually but this is not implemented yet.
+Typical memory layout for two tasks and two priority levels is shown below.
+
+![vectors](doc/img/mem.png)
+
+When the task1 is active MPU is programmed to allow access to memory shown as
+green:
+
+![vectors](doc/img/mpu.png)
+
+A task may have access to single message at any moment.
 
 
 Using devices/interrupts
@@ -104,8 +144,39 @@ be redirected to channels as messages by the kernel part of application if
 needed.
 
 
+Building
+--------
+
+Building is a little complex since we have to pack many relocatable files
+into single ELF with proper alignment. 
+
+First, the core part containing MCU initialization is compiled using its
+linker script into relocatable kernel.0 file. Note that extension is 
+numeric 0, not o. This file is expected to have vector table and have to be
+placed first.
+
+Second, user tasks are compiled into regular relocatable object files using
+framework-provided linker script. It has no deal with addresses, just
+rearrange sections.
+All relocatable files should have sections text/data/bss (possibly zero-sized),
+other sections are ignored.
+
+Third, ldgen.sh script extracts section sizes for *.o and kernel.0 files and
+generates linker script packing the files together with proper alignment.
+Also it provides section sizes in a special symbol so kernel may
+further use this info when spawning tasks.
+That's it.
+
+On figure below user-provided parts are shown as green, framework-provided
+parts are shown as blue, and generated files are showh as yellow.
+
+![vectors](doc/img/build.png)
+
+
 Syscalls
 --------
+
+Syscalls are the only way to communicate with the core and the other tasks.
 
 | syscall      | description |
 |--------------|-------------|
@@ -135,19 +206,19 @@ Files
 The demo
 --------
 
-The demo contain two tasks or actors: sender and controller. The sender sends
+The demo contains two tasks or actors: sender and controller. The sender sends
 requests to toggle LED to 'controller' who has access to the corresponding 
 peripheral. Both actors constantly crash after few activations but they're 
 gently restarted by exceptions and the system continues to work.
 This demonstrates 'let it crash' principle: even when no task is reliable 
 the whole system works as designed.
+To build the demo run
 
+        make
 
-| file      | description |
-|-----------|------------------------------------|
-| main.c    | privileged part of the application |
-| led_msg.h | IPC message description |
-| task*.c   | task code |
+in the demo folder (provided that arm-none-eabi- toolchain is available via 
+PATH). This yields image.elf file containing all the tasks and the kernel
+ready for flashing.
 
 
 FAQ
