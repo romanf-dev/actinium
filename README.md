@@ -9,66 +9,6 @@ research and experiments. This readme is also incomplete and will be updated
 over time...
 
 
-Architecture
-------------
-
-        unprivileged CPU mode
-        
-        +------+  +------+  +------+  +------+
-        | task |  | task |  | task |  | task |
-        +------+  +------+  +------+  +------+
-           ^        ^ ^        ^         ^
-           |        | |        |         |     IPC
-        +------------------------------------+
-        |  |        | |        |         |   |
-        |  +--------+ +--------+         V   | 
-        |                           +------+ |
-        |           CORE            | task | |
-        |                           +------+ |
-        | privileged CPU mode                |
-        +------------------------------------+
-
-Executable image consists of number of task and a core containing system
-services. Each task contains exactly one actor which is a run-to-completion
-stackless coroutine. Actors communicate using channels and messages.
-Each task runs in memory-protected domain and have no direct access to 
-neither core nor peripherals. It is assumed that executable image is 
-deployed as a whole, so tasks can't be created or destroyed at runtime.
-
-Each task is assigned a fixed priority and each priority corresponds to
-some (unused by the user application) interrupt vector. This approach 
-allows to use interrupt controller as a hardware-implemented scheduler.
-
-For example, figure below depicts three vectors (5, 2, 1) assigned to 
-three runqueues.
-
-        +---+---+---+---+---+---+---+---+
-        | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | <- ISR vectors
-        +---+---+---+---+---+---+---+---+
-                  |           |   |
-                  |   +-------+   |
-                  |   |   +-------+
-                  |   |   |
-                  V   V   V
-                +---+---+---+
-                | H | M | L |  <- Runqueues for high (H), medium (M) and low (L) priority
-                +---+---+---+
-                  |   |   |
-                  V   V   V
-                  O   O   O    <- Tasks
-                  O       O
-                  O  
-        
-Note that vector is assigned to priority level, not actor. So number of
-vectors that have to be reserved for scheduling is always finite and limited,
-whereas number of tasks/actors is unlimited.
-
-Most Cortex-M chips define 'priority bits' for NVIC as 3-5, so number 
-of distinct priority levels is 8-32.
-Other vectors unused by scheduling behave as expected and are not used by the
-framework in any way.
-
-
 Features
 --------
 
@@ -106,6 +46,78 @@ Design principles
     When the framework encounters crash condition, e.g. invalid memory 
     reference, wrong syscall number, exception, etc. the erronous actor 
     is automatically marked for restart.
+
+
+Architecture
+------------
+
+        unprivileged CPU mode
+        
+        +------+  +------+  +------+  +------+
+        | task |  | task |  | task |  | task |
+        +------+  +------+  +------+  +------+
+           ^        ^ ^        ^         ^
+           |        | |        |         |     IPC
+        +------------------------------------+
+        |  |        | |        |         |   |
+        |  +--------+ +--------+         V   | 
+        |                           +------+ |
+        |           CORE            | task | |
+        |                           +------+ |
+        | privileged CPU mode                |
+        +------------------------------------+
+
+
+Executable image consists of a number of tasks and a core containing system
+services. Each task contains exactly one actor which is a run-to-completion
+stackless coroutine. Actors communicate using channels and messages.
+Tasks run in memory-protected domain and have no direct access to 
+neither core nor peripherals. It is assumed that executable image is 
+deployed as a whole, so tasks can't be created or destroyed at runtime.
+
+Each task is assigned a fixed priority and each priority corresponds to
+some (unused by the user application) interrupt vector. This approach 
+allows to use interrupt controller as a hardware-implemented scheduler.
+
+For example, figure below depicts three vectors (5, 2, 1) assigned to 
+three runqueues.
+
+        +---+---+---+---+---+---+---+---+
+        | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | <- ISR vectors
+        +---+---+---+---+---+---+---+---+
+                  |           |   |
+                  |   +-------+   |
+                  |   |   +-------+
+                  |   |   |
+                  V   V   V
+                +---+---+---+
+                | H | M | L |  <- Runqueues for high (H), medium (M) and low (L) priority
+                +---+---+---+
+                  |   |   |
+                  V   V   V
+                  O   O   O    <- Tasks
+                  O       O
+                  O  
+        
+Note that vector is assigned to priority level, not actor. So number of
+vectors that have to be reserved for scheduling is always finite and limited,
+whereas number of tasks/actors is unlimited.
+
+Most Cortex-M chips define 'priority bits' for NVIC as 3-5, so number 
+of distinct priority levels is 8-32.
+Other vectors unused by scheduling behave as expected and are not used by the
+framework in any way.
+
+Syscalls are the only way to communicate with the core and the other tasks.
+
+| syscall      | description |
+|--------------|-------------|
+|subscribe | causes actor to end execution and to subscribe to the channel specified |
+|delay     | re-activates actor execution after the given period |
+|send      | post the currently owned message into the channel |
+|try_pop   | polls a channel synchronously |
+|alloc     | allocate new message and save it inside the actor struct |
+|free      | free the owned message |
 
 
 Reliability
@@ -153,7 +165,7 @@ Because of hardware restrictions of the MPU, messages should be:
 - aligned to its size
 - sized to power of 2
 
-A task may have access to single message at any moment.
+A task may have access to a single message at any moment.
 
 
 Using devices/interrupts
@@ -165,8 +177,8 @@ be redirected to channels as messages by the kernel part of application if
 needed.
 
 
-Building
---------
+Build process
+-------------
 
 Building is a little complex since we have to pack many relocatable files
 into single ELF with proper alignment. 
@@ -188,25 +200,22 @@ Also it provides section sizes in a special symbol so kernel may
 further use this info when spawning tasks.
 That's it.
 
-On figure below user-provided parts are shown as green, framework-provided
-parts are shown as blue, and generated files are showh as yellow.
 
-![vectors](doc/img/build.png)
-
-
-Syscalls
---------
-
-Syscalls are the only way to communicate with the core and the other tasks.
-
-| syscall      | description |
-|--------------|-------------|
-|subscribe | causes actor to end execution and to subscribe to the channel specified |
-|delay     | re-activates actor execution after the given period |
-|send      | post the currently owned message into the channel |
-|try_pop   | polls a channel synchronously |
-|alloc     | allocate new message and save it inside the actor struct |
-|free      | free the owned message |
+                                +---------+               text/data/bss sizes      +--------------+
+                                | task.ld |                   +------------------->|   ldgen.sh   |
+                                +---------+                   |            ^       +--------------+
+                   section grouping  |                        |            |               |
+                +--------+           V           +----------------------+  |               |  section alignment & relocation
+                | task.c | --------------------> | relocatable  task.o  |--+--+            V
+                +--------+                       +----------------------+  |  |    +------------------+
+                               +-----------+                               |  |    | generated script |
+                               | kernel.ld |                       +-------+  |    +------------------+ 
+                               +-----------+                       |          |            |  final linking
+                   section grouping  |                             |          |            V
+                +--------+           V           +----------------------+     |    +------------------+
+                | main.c | --------------------> | relocatable kernel.0 |-----+--->|    executable    |
+                +--------+                       +----------------------+          |       image      |
+                                                                                   +------------------+
 
 
 Files
