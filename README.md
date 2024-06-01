@@ -12,7 +12,21 @@ over time...
 Architecture
 ------------
 
-![architecture](doc/img/arch.png)
+        unprivileged CPU mode
+        
+        +------+  +------+  +------+  +------+
+        | task |  | task |  | task |  | task |
+        +------+  +------+  +------+  +------+
+           ^        ^ ^        ^         ^
+           |        | |        |         |     IPC
+        +------------------------------------+
+        |  |        | |        |         |   |
+        |  +--------+ +--------+         V   | 
+        |                           +------+ |
+        |           CORE            | task | |
+        |                           +------+ |
+        | privileged CPU mode                |
+        +------------------------------------+
 
 Executable image consists of number of task and a core containing system
 services. Each task contains exactly one actor which is a run-to-completion
@@ -25,10 +39,26 @@ Each task is assigned a fixed priority and each priority corresponds to
 some (unused by the user application) interrupt vector. This approach 
 allows to use interrupt controller as a hardware-implemented scheduler.
 
-For example, figure below depicts three vectors assigned to three runqueues.
+For example, figure below depicts three vectors (5, 2, 1) assigned to 
+three runqueues.
 
-![vectors](doc/img/vectors.png)
-
+        +---+---+---+---+---+---+---+---+
+        | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | <- ISR vectors
+        +---+---+---+---+---+---+---+---+
+                  |           |   |
+                  |   +-------+   |
+                  |   |   +-------+
+                  |   |   |
+                  V   V   V
+                +---+---+---+
+                | H | M | L |  <- Runqueues for high (H), medium (M) and low (L) priority
+                +---+---+---+
+                  |   |   |
+                  V   V   V
+                  O   O   O    <- Tasks
+                  O       O
+                  O  
+        
 Note that vector is assigned to priority level, not actor. So number of
 vectors that have to be reserved for scheduling is always finite and limited,
 whereas number of tasks/actors is unlimited.
@@ -122,15 +152,6 @@ Because of hardware restrictions of the MPU, messages should be:
 - at least 32 bytes size
 - aligned to its size
 - sized to power of 2
-
-Typical memory layout for two tasks and two priority levels is shown below.
-
-![vectors](doc/img/mem.png)
-
-When the task1 is active MPU is programmed to allow access to memory shown as
-green:
-
-![vectors](doc/img/mpu.png)
 
 A task may have access to single message at any moment.
 
