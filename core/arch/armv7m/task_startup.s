@@ -14,6 +14,23 @@
 startup:
     teq lr, #0            /* Nonzero LR means 'cold restart' with bss reinit. */
     beq task_run
+
+    ldr r0, =_sdata
+    ldr r1, =_edata
+    ldr r2, =_etext
+    movs r3, #0
+    b data_init
+
+data_copying:
+    ldr r4, [r2, r3]
+    str r4, [r0, r3]
+    adds r3, r3, #4
+
+data_init:
+    adds r4, r0, r3
+    cmp r4, r1
+    bcc data_copying
+
     ldr r1, =_sbss
     ldr r2, =_ebss
     movs r3, #0
