@@ -11,10 +11,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdnoreturn.h>
+#include <stddef.h>
 #include "magnesium.h"
 #include "ac_port.h"
-
-typedef struct mg_message_t ac_message_t;
 
 enum {
     AC_REGION_FLASH,
@@ -26,13 +25,20 @@ enum {
 };
 
 enum {
-    AC_CALL_SUBSCRIBE,
     AC_CALL_DELAY,
-    AC_CALL_PUSH,
+    AC_CALL_SUBSCRIBE,
+    AC_CALL_ALLOC_ASYNC,
+    _AC_CALL_LAST_ASYNC = AC_CALL_ALLOC_ASYNC, /* only sync syscalls below */
     AC_CALL_TRY_POP,
-    AC_CALL_MSG_ALLOC,
-    AC_CALL_MSG_FREE,
+    AC_CALL_ALLOC_SYNC,
+    AC_CALL_PUSH,
+    AC_CALL_FREE,
     AC_CALL_MAX
+};
+
+struct ac_message_t {
+    struct mg_message_t header;
+    uintptr_t poisoned; /* only uintptrs in MG header, use it for alignment */
 };
 
 struct ac_actor_t {
@@ -71,6 +77,11 @@ struct ac_channel_t {
     struct mg_queue_t base;
     int msg_type;
 };
+
+_Static_assert(offsetof(struct ac_message_t, header) == 0, "non 1st member");
+_Static_assert(offsetof(struct ac_actor_t, base) == 0, "non 1st member");
+_Static_assert(offsetof(struct ac_message_pool_t, base) == 0, "non 1st member");
+_Static_assert(offsetof(struct ac_channel_t, base) == 0, "non 1st member");
 
 extern struct ac_channel_t* ac_channel_validate(
     struct ac_actor_t* actor, 
@@ -112,23 +123,23 @@ static inline void ac_channel_init(struct ac_channel_t* chan, int msg_type) {
 }
 
 static inline void _ac_message_set(struct ac_actor_t* actor) {
-    ac_message_t* const msg = actor->base.mailbox;
+    struct ac_message_t* const msg = (struct ac_message_t*) actor->base.mailbox;
 
     if (msg) {
-        struct ac_message_pool_t* const parent = (void*) msg->parent;
+        struct ac_message_pool_t* const parent = (void*) msg->header.parent;
         struct hal_mpu_region_t* region = &actor->granted[AC_REGION_MSG];       
         actor->msg.parent = parent;
         actor->msg.type = parent->msg_type;
         actor->msg.size = parent->base.block_sz;
-        msg->parent = 0;
+        msg->header.parent = 0;
         hal_mpu_region_init(region, (uintptr_t)msg, actor->msg.size, AC_ATTR_RW);
     }
 }
 
 static inline void _ac_message_cleanup(struct ac_actor_t* actor) {
-    ac_message_t* const msg = actor->base.mailbox;
+    struct ac_message_t* const msg = (struct ac_message_t*) actor->base.mailbox;
     assert(msg != 0);
-    msg->parent = &actor->msg.parent->base;
+    msg->header.parent = &actor->msg.parent->base;
     actor->base.mailbox = 0;
     actor->msg.parent = 0;
     actor->msg.type = 0;
@@ -136,12 +147,13 @@ static inline void _ac_message_cleanup(struct ac_actor_t* actor) {
     hal_mpu_region_init(&actor->granted[AC_REGION_MSG], 0, 0, AC_ATTR_RW);
 }
 
-static inline void _ac_message_release(struct ac_actor_t* actor) {
-    ac_message_t* const msg = actor->base.mailbox;
+static inline void _ac_message_release(struct ac_actor_t* actor, bool poisoned) {
+    struct ac_message_t* const msg = (struct ac_message_t*) actor->base.mailbox;
 
     if (msg) {
         _ac_message_cleanup(actor);
-        mg_message_free(msg);
+        msg->poisoned = (uintptr_t) poisoned;
+        mg_message_free(&msg->header);
     }
 }
 
@@ -149,12 +161,13 @@ static inline void _ac_channel_push(
     struct ac_actor_t* src, 
     struct ac_channel_t* dst
 ) {
-    ac_message_t* const msg = src->base.mailbox;
+    struct ac_message_t* const msg = (struct ac_message_t*) src->base.mailbox;
 
     if (msg) {
         if (src->msg.type == dst->msg_type) { /* typechecking */
+            msg->poisoned = 0;
             _ac_message_cleanup(src);
-            mg_queue_push(&dst->base, msg);
+            mg_queue_push(&dst->base, &msg->header);
         }
     }
 }
@@ -288,7 +301,7 @@ static inline uintptr_t ac_actor_exception(void) {
     struct ac_actor_t* const me = context->running_actor;
     const unsigned int prio = me->base.prio - 1;
     me->restart_req = true;
-    _ac_message_release(me);
+    _ac_message_release(me, true);
     _mg_actor_activate(&me->base);
 
     if(context->preempted[prio].actor) {
@@ -314,7 +327,7 @@ static inline void _ac_sys_subscribe(struct ac_actor_t* actor, uintptr_t req) {
     struct ac_channel_t* const chan = ac_channel_validate(actor, req);
 
     if (chan) {
-        _ac_message_release(actor);
+        _ac_message_release(actor, false);
         struct mg_message_t* const msg = mg_queue_pop(&chan->base, &actor->base);
 
         if (msg) {
@@ -337,7 +350,7 @@ static inline void _ac_sys_trypop(struct ac_actor_t* actor, uintptr_t req) {
     struct ac_channel_t* const chan = ac_channel_validate(actor, req);
 
     if (chan) {
-        _ac_message_release(actor);
+        _ac_message_release(actor, false);
         actor->base.mailbox = mg_queue_pop(&chan->base, 0);
         _ac_message_set(actor);
         hal_mpu_update_region(AC_REGION_MSG, &actor->granted[AC_REGION_MSG]);
@@ -348,7 +361,7 @@ static inline void _ac_sys_alloc(struct ac_actor_t* actor, uintptr_t req) {
     struct ac_message_pool_t* const pool = ac_pool_validate(actor, req);
 
     if (pool) {
-        _ac_message_release(actor);
+        _ac_message_release(actor, false);
         actor->base.mailbox = mg_message_alloc(&pool->base);
         _ac_message_set(actor);
         hal_mpu_update_region(AC_REGION_MSG, &actor->granted[AC_REGION_MSG]);
@@ -356,8 +369,26 @@ static inline void _ac_sys_alloc(struct ac_actor_t* actor, uintptr_t req) {
 }
 
 static inline void _ac_sys_free(struct ac_actor_t* actor) {
-    _ac_message_release(actor);
+    _ac_message_release(actor, false);
     hal_mpu_update_region(AC_REGION_MSG, &actor->granted[AC_REGION_MSG]);
+}
+
+static inline void _ac_sys_alloc_async(struct ac_actor_t* actor, uintptr_t req) {
+    struct ac_message_pool_t* const pool = ac_pool_validate(actor, req);
+
+    if (pool) {
+        _ac_message_release(actor, false);
+        struct ac_message_t* msg = mg_message_alloc(&pool->base);
+        
+        if (msg == 0) {
+            msg = (void*) mg_queue_pop(&pool->base.queue, &actor->base);
+        }
+
+        if (msg) {
+            actor->base.mailbox = &msg->header;
+            _mg_actor_activate(&actor->base);
+        }
+    }
 }
 
 static inline uintptr_t _ac_svc_handler(uint32_t r0, uintptr_t prev_frame) {
@@ -366,26 +397,29 @@ static inline uintptr_t _ac_svc_handler(uint32_t r0, uintptr_t prev_frame) {
     uintptr_t frame = prev_frame;
     const uint32_t opcode = r0 >> 28;
     const uint32_t arg = r0 & 0x0fffffffu;
-    bool sync = opcode > 1;
+    bool sync = opcode > _AC_CALL_LAST_ASYNC;
 
     if (frame && (opcode < AC_CALL_MAX)) {
         switch (opcode) {
-        case AC_CALL_SUBSCRIBE: 
-            _ac_sys_subscribe(actor, arg); 
-            break;
         case AC_CALL_DELAY: 
             _ac_sys_timeout(actor, arg);
             break;
-        case AC_CALL_PUSH: 
-            _ac_sys_push(actor, arg);
+        case AC_CALL_SUBSCRIBE: 
+            _ac_sys_subscribe(actor, arg); 
+            break;
+        case AC_CALL_ALLOC_ASYNC:
+            _ac_sys_alloc_async(actor, arg);
             break;
         case AC_CALL_TRY_POP:
             _ac_sys_trypop(actor, arg);
             break;
-        case AC_CALL_MSG_ALLOC:
+        case AC_CALL_ALLOC_SYNC:
             _ac_sys_alloc(actor, arg);
             break;
-        case AC_CALL_MSG_FREE:
+        case AC_CALL_PUSH: 
+            _ac_sys_push(actor, arg);
+            break;
+        case AC_CALL_FREE:
             _ac_sys_free(actor);
             break;
         }
@@ -405,31 +439,36 @@ static inline uintptr_t _ac_svc_handler(uint32_t r0, uintptr_t prev_frame) {
 
 extern void* _ac_syscall(uintptr_t arg);
 
-static inline uint32_t act_subscribe_to(unsigned int id) {
-    return (AC_CALL_SUBSCRIBE << 28) | id;
-}
-
 static inline uint32_t act_sleep_for(uint32_t delay) {
     return (AC_CALL_DELAY << 28) | (delay & UINT32_C(0x0fffffff));
 }
 
-static inline void* act_push(unsigned int id) {
-    const uint32_t arg = (AC_CALL_PUSH << 28) | id;
-    return _ac_syscall(arg);
+static inline uint32_t act_subscribe_to(unsigned int id) {
+    return (AC_CALL_SUBSCRIBE << 28) | (id & UINT32_C(0x0fffffff));
+}
+
+static inline uint32_t act_async_alloc(unsigned int id) {
+    return (AC_CALL_ALLOC_ASYNC << 28) | (id & UINT32_C(0x0fffffff));
 }
 
 static inline void* act_try_pop(unsigned int id) {
-    const uint32_t arg = (AC_CALL_TRY_POP << 28) | id;
+    const uint32_t arg = (AC_CALL_TRY_POP << 28) | (id & UINT32_C(0x0fffffff));
     return _ac_syscall(arg);
 }
 
 static inline void* act_alloc(unsigned int id) {
-    const uint32_t arg = (AC_CALL_MSG_ALLOC << 28) | id;
+    const uint32_t arg = 
+        (AC_CALL_ALLOC_SYNC << 28) | (id & UINT32_C(0x0fffffff));
+    return _ac_syscall(arg);
+}
+
+static inline void* act_push(unsigned int id) {
+    const uint32_t arg = (AC_CALL_PUSH << 28) | (id & UINT32_C(0x0fffffff));
     return _ac_syscall(arg);
 }
 
 static inline void act_free(void) {
-    _ac_syscall(AC_CALL_MSG_FREE << 28);
+    _ac_syscall(AC_CALL_FREE << 28);
 }
 
 #define AC_ACTOR_START static int _ac_state = 0; switch(_ac_state) { case 0:
@@ -437,3 +476,4 @@ static inline void act_free(void) {
 #define AC_AWAIT(q) _ac_state = __LINE__; return (q); case __LINE__:
 
 #endif
+

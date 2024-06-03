@@ -10,9 +10,9 @@
 #include "actinium.h"
 
 struct led_msg_t {
-    ac_message_t header;
+    struct ac_message_t header;
     unsigned int control;
-    uint8_t padding[32 - sizeof(ac_message_t) - sizeof(unsigned int)];
+    uint8_t padding[32 - sizeof(struct ac_message_t) - sizeof(unsigned int)];
 };
 
 _Static_assert(
