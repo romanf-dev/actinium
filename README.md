@@ -13,18 +13,20 @@ Features
 --------
 
 - Preemptive multitasking
-- Cooperative scheduling within a single priority level
-- Actors are separately compiled and run in unprivileged mode
-- Region-based memory protection using MPU
-- Message passing IPC
-- Timer services with 'sleep for' functionality
+- Cooperative scheduling at the same priority level
+- Hard real-time capability
+- Tasks are separately compiled and run in unprivileged mode
+- Region-based memory protection
+- Message passing communication
+- Timer services
+- No heap required
 - Only ARM Cortex-M3/M4 (with MPU) are supported at now
 
 
 Design principles
 -----------------
 
-1.  **Actor-based execution model (Hoare's CSP).**
+1.  **Actor-based execution model.**
     Most of MCU-based embedded systems are reactive so full-fledged threads
     are often too heavyweight because of the requirement to allocate a stack
     for each thread. Actors use one stack per **priority level**.
@@ -109,15 +111,21 @@ Other vectors unused by scheduling behave as expected and are not used by the
 framework in any way.
 
 Syscalls are the only way to communicate with the core and the other tasks.
+Syscalls are divided into two classes: synchronous and asynchronous. Synchronous 
+syscalls act like normal functions - they return some value to the caller and 
+the execution continues. Asynchronous ones suspend actor execution until some
+condition is satisfied.
 
-| syscall      | description |
-|--------------|-------------|
-|subscribe | causes actor to end execution and to subscribe to the channel specified |
-|delay     | re-activates actor execution after the given period |
-|send      | post the currently owned message into the channel |
-|try_pop   | polls a channel synchronously |
-|alloc     | allocate new message and save it inside the actor struct |
-|free      | free the owned message |
+
+| syscall  | synchronous | description |
+|----------|-------------|-------------|
+|delay     | |re-activates actor execution after the specified period |
+|subscribe to channel| |wait for new messages |
+|subscribe to message pool| |wait for messages to be available for allocation |
+|try_pop   | o |polls a channel synchronously |
+|alloc     | o |allocate new message |
+|send      | o |post the currently owned message into a channel |
+|free      | o |free the owned message |
 
 
 Reliability
@@ -166,6 +174,34 @@ Because of hardware restrictions of the MPU, messages should be:
 - sized to power of 2
 
 A task may have access to a single message at any moment.
+After flashing the MCU memory looks like the following:
+
+        +--------------------------------+
+        |           ISR stack            |
+        +--------------------------------+
+        |              ...               |
+        +--------------------------------+
+        |       Task n data & bss        |
+        +--------------------------------+
+        |       Task 0 data & bss        |
+        +--------------------------------+
+        | Stacks for each priority level |
+        +--------------------------------+
+        |     Aligned Messaege pools     |
+        +--------------------------------+
+        |   Core data, runqueues, etc    |
+        +--------------------------------+ <------ SRAM base
+        |              ...               |
+        +--------------------------------+
+        |      Task n code & rodata      |
+        +--------------------------------+
+        |      Task 0 code & rodata      |
+        +--------------------------------+
+        |      Core code, ISRs, init     |
+        +--------------------------------+
+        |          ISR vectors           |
+        +--------------------------------+ <------- flash base
+
 
 
 Using devices/interrupts
@@ -180,8 +216,8 @@ needed.
 Build process
 -------------
 
-Building is a little complex since we have to pack many relocatable files
-into single ELF with proper alignment. 
+Building is a little bit complex since we have to pack many semi-independent
+tasks into single ELF with proper alignment. 
 
 First, the core part containing MCU initialization is compiled using its
 linker script into relocatable kernel.0 file. Note that extension is 
@@ -201,21 +237,21 @@ further use this info when spawning tasks.
 That's it.
 
 
-                                +---------+               text/data/bss sizes      +--------------+
-                                | task.ld |                   +------------------->|   ldgen.sh   |
-                                +---------+                   |            ^       +--------------+
-                   section grouping  |                        |            |               |
-                +--------+           V           +----------------------+  |               |  section alignment & relocation
-                | task.c | --------------------> | relocatable  task.o  |--+--+            V
-                +--------+                       +----------------------+  |  |    +------------------+
-                               +-----------+                               |  |    | generated script |
-                               | kernel.ld |                       +-------+  |    +------------------+ 
-                               +-----------+                       |          |            |  final linking
-                   section grouping  |                             |          |            V
-                +--------+           V           +----------------------+     |    +------------------+
-                | main.c | --------------------> | relocatable kernel.0 |-----+--->|    executable    |
-                +--------+                       +----------------------+          |       image      |
-                                                                                   +------------------+
+                         +---------+               text/data/bss sizes      +--------------+
+                         | task.ld |                   +------------------->|   ldgen.sh   |
+                         +---------+                   |            ^       +--------------+
+            section grouping  |                        |            |               |
+         +--------+           V           +----------------------+  |               |  section alignment &
+         | task.c | --------------------> | relocatable  task.o  |--+--+            V  relocation
+         +--------+                       +----------------------+  |  |    +------------------+
+                        +-----------+                               |  |    | generated script |
+                        | kernel.ld |                       +-------+  |    +------------------+ 
+                        +-----------+                       |          |            |  final linking
+            section grouping  |                             |          |            V
+         +--------+           V           +----------------------+     |    +------------------+
+         | main.c | --------------------> | relocatable kernel.0 |-----+--->|    executable    |
+         +--------+                       +----------------------+          |       image      |
+                                                                            +------------------+
 
 
 Files
@@ -224,22 +260,22 @@ Files
 
 | file at /core  | description |
 |----------------|-------------|
-|arch/armv7m/ac_port.h      | hardware abstraction layer interface for ARMv7-M |
-|arch/armv7m/actinium.s     | low-level interrupt/syscall entries |
-|arch/armv7m/core*.h        | CMSIS headers by ARM |
+|arch/armv7m/ac_port.h | hardware abstraction layer interface for ARMv7-M |
+|arch/armv7m/actinium.s | low-level interrupt/syscall entries |
+|arch/armv7m/core*.h | CMSIS headers by ARM |
 |arch/armv7m/task_startup.s | low-level task initialization |
-|actinium.h                 | cross-platform framework functions |
-|task.ld                    | linker script for tasks |
-|ldgen.sh                   | linker script generator to place kernel and actors in memory |
+|actinium.h | cross-platform framework functions |
+|task.ld | linker script for tasks |
+|ldgen.sh | linker script generator to place kernel and actors in memory |
 
 
 The demo
 --------
 
-The demo contains two tasks or actors: sender and controller. The sender sends
+The demo contains two tasks: sender and controller. The sender sends
 requests to toggle LED to 'controller' who has access to the corresponding 
 peripheral. Both actors constantly crash after few activations but they're 
-gently restarted by exceptions and the system continues to work.
+restarted by exceptions and the system continues to work.
 This demonstrates 'let it crash' principle: even when no task is reliable 
 the whole system works as designed.
 To build the demo run
