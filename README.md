@@ -4,9 +4,9 @@ Actinium
 Actinium is a microcontroller framework implementing actor-based execution 
 model. It provides both hardware-assisted scheduling and memory protection 
 for fault isolation.
-Please note it is still in pre-alpha stage and isn't ready for any use except
-research and experiments. This readme is also incomplete and will be updated 
-over time...
+Please note it is still in pre-alpha stage and **isn't ready** for any use 
+except research and experiments. This readme is also incomplete and will 
+be updated over time...
 
 
 Features
@@ -93,8 +93,8 @@ three runqueues.
                   |   |   |
                   V   V   V
                 +---+---+---+
-                | H | M | L |  <- Runqueues for high (H), medium (M) and low (L) priority
-                +---+---+---+
+                | H | M | L |  <- Runqueues for high (H), medium (M) and 
+                +---+---+---+     low (L) priority
                   |   |   |
                   V   V   V
                   O   O   O    <- Tasks
@@ -176,31 +176,35 @@ Because of hardware restrictions of the MPU, messages should be:
 A task may have access to a single message at any moment.
 After flashing the MCU memory looks like the following:
 
-        +--------------------------------+
-        |           ISR stack            |
-        +--------------------------------+
-        |              ...               |
-        +--------------------------------+
-        |       Task n data & bss        |
-        +--------------------------------+
-        |       Task 0 data & bss        |
-        +--------------------------------+
-        | Stacks for each priority level |
-        +--------------------------------+
-        |     Aligned Messaege pools     |
-        +--------------------------------+
-        |   Core data, runqueues, etc    |
-        +--------------------------------+ <------ SRAM base
-        |              ...               |
-        +--------------------------------+
-        |      Task n code & rodata      |
-        +--------------------------------+
-        |      Task 0 code & rodata      |
-        +--------------------------------+
-        |      Core code, ISRs, init     |
-        +--------------------------------+
-        |          ISR vectors           |
-        +--------------------------------+ <------- flash base
+
+
+               Memory layout                 MPU regions when Task 0 runs
+
+        +--------------------------+         +--------------------------+
+        |        ISR stack         |         |                          |
+        +--------------------------+         +--------------------------+
+        |           ...            |         |                          |
+        +--------------------------+         +--------------------------+
+        |    Task n data & bss     |         |                          |
+        +--------------------------+         +--------------------------+
+        |    Task 0 data & bss     |         |    Task 0 data & bss     |
+        +--------------------------+         +--------------------------+
+        |Stacks for each prio level|         | Stack for T0 prio |      |
+        +--------------------------+         +--------------------------+
+        |  Aligned Message pools   |         | Owned msg |  no access   |
+        +--------------------------+         +--------------------------+
+        | Core data, runqueues, etc|         |                          |
+        +--------------------------+ <-SRAM  +--------------------------+
+        |           ...            |         |                          |
+        +--------------------------+         +--------------------------+
+        |   Task n code & rodata   |         |                          |
+        +--------------------------+         +--------------------------+
+        |   Task 0 code & rodata   |         |   Task 0 code & rodata   |
+        +--------------------------+         +--------------------------+
+        |  Core code, ISRs, init   |         |                          |
+        +--------------------------+         +--------------------------+
+        |       ISR vectors        |         |                          |
+        +--------------------------+ <-FLASH +--------------------------+
 
 
 
@@ -237,21 +241,22 @@ further use this info when spawning tasks.
 That's it.
 
 
-                         +---------+               text/data/bss sizes      +--------------+
-                         | task.ld |                   +------------------->|   ldgen.sh   |
-                         +---------+                   |            ^       +--------------+
-            section grouping  |                        |            |               |
-         +--------+           V           +----------------------+  |               |  section alignment &
-         | task.c | --------------------> | relocatable  task.o  |--+--+            V  relocation
-         +--------+                       +----------------------+  |  |    +------------------+
-                        +-----------+                               |  |    | generated script |
-                        | kernel.ld |                       +-------+  |    +------------------+ 
-                        +-----------+                       |          |            |  final linking
-            section grouping  |                             |          |            V
-         +--------+           V           +----------------------+     |    +------------------+
-         | main.c | --------------------> | relocatable kernel.0 |-----+--->|    executable    |
-         +--------+                       +----------------------+          |       image      |
-                                                                            +------------------+
+                       +-----------+         text/data/bss sizes    +------------------+
+                       |  task.ld  |             +----------------->|      ldgen.sh    |
+                       +-----------+             |            ^     +------------------+
+            section grouping |                   |            |            |
+         +--------+          V      +----------------------+  |            |  section alignment
+         | task.c |---------------> | relocatable  task.o  |--+--+         V  & relocation
+         +--------+                 +----------------------+  |  |  +------------------+
+                                                              |  |  | generated script |
+                       +-----------+                   +------+  |  +------------------+        
+                       | kernel.ld |                   |         |         |  final linking
+                       +-----------+                   |         |         V
+            section grouping |                         |         |  +------------------+
+         +--------+          V      +----------------------+     V  |    executable    |
+         | main.c |---------------> | relocatable kernel.0 |------->|       image      |
+         +--------+                 +----------------------+        +------------------+
+                                                                    
 
 
 Files
