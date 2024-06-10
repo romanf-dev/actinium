@@ -27,3 +27,7 @@ clean:
 	rm -f *.o *.elf *.0 ldscript.ld
 	$(MAKE) --directory=../core/arch/armv7m clean
 
+rust_example: fwk
+	$(MAKE) --directory=rust_app0
+	mv rust_app0/target/thumbv7m-none-eabi/release/actinium_example task0.o
+
