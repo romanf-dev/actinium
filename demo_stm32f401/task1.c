@@ -19,14 +19,14 @@ uint32_t main(void) {
     AC_ACTOR_START;
     
     for (;;) {
-        AC_AWAIT(act_sleep_for(100));
+        AC_AWAIT(act_sleep_for(1000));
 
         struct led_msg_t* msg = act_alloc(0);
         msg->control = (state ^= 1);
 
         act_push(0);
 
-        if (++counter == 50) {
+        if (++counter == 20) {
             crash();
         }
     }
