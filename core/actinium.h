@@ -125,7 +125,7 @@ static inline void ac_channel_init(struct ac_channel_t* chan, int msg_type) {
 static inline void _ac_message_set(struct ac_actor_t* actor) {
     struct ac_message_t* const msg = (struct ac_message_t*) actor->base.mailbox;
 
-    if (msg) {
+    if (msg && (actor->msg.parent == 0)) {
         struct ac_message_pool_t* const parent = (void*) msg->header.parent;
         struct hal_mpu_region_t* region = &actor->granted[AC_REGION_MSG];       
         actor->msg.parent = parent;
