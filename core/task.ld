@@ -9,7 +9,7 @@ ENTRY(main)
 SECTIONS
 {
     .text : {
-        *(.startup)
+        KEEP(*(.startup))
         *(.text*)   
         *(.rodata*)
         _etext = .;
