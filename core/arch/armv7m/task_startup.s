@@ -43,6 +43,7 @@ bss_zeroing:
 start_bss_init:
     cmp r1, r2
     bcc bss_zeroing
+    mov r0, #0
 
 task_run:
     bl main
