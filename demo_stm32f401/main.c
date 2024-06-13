@@ -44,19 +44,8 @@ uintptr_t ac_svc_handler(uint32_t r0, uintptr_t old_frame) {
 struct mg_context_t g_mg_context;
 struct ac_context_t g_ac_context; 
 
-void MemManage_Handler(void) {
-    const uintptr_t frame = ac_actor_exception();
-    __set_PSP(frame);
-}
-
-void UsageFault_Handler(void) {
-    const uintptr_t frame = ac_actor_exception();
-    __set_PSP(frame);
-}
-
-void BusFault_Handler(void) {
-    const uintptr_t frame = ac_actor_exception();
-    __set_PSP(frame);
+uintptr_t ac_trap_handler(uint32_t id, uintptr_t frame) {
+    return ac_actor_exception();
 }
 
 static struct ac_channel_t g_chan;
@@ -79,7 +68,7 @@ struct ac_message_pool_t* ac_pool_validate(
 int main(void) {
     static struct ac_actor_t g_handler;
     static struct ac_actor_t g_sender;
-    static alignas(1024) uint32_t stack0[1024 / sizeof(uint32_t)];
+    static alignas(1024) uint8_t stack0[1024];
     static alignas(sizeof(struct led_msg_t)) struct led_msg_t g_storage[3];
 
     /* setup clocks and other hardware stuff... */
@@ -118,11 +107,14 @@ int main(void) {
     __DSB();
     __ISB();
     
+    /* base address of flash and its size */
+    ac_context_init(0x08000000, 0x40000);
+
     /* both actors share the same priority so there's only one stack */
-    ac_context_init();
     g_ac_context.stacks[0].addr = (uintptr_t)stack0;
     g_ac_context.stacks[0].size = sizeof(stack0);
 
+    /* create global objects, 1 is used as unique type id, any value may be used */
     ac_message_pool_init(&g_pool, g_storage, sizeof(g_storage), sizeof(g_storage[0]), 1);
     ac_channel_init(&g_chan, 1);
 

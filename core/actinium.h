@@ -56,6 +56,7 @@ struct ac_actor_t {
 
 struct ac_context_t {
     struct ac_actor_t* running_actor;
+    struct hal_mpu_region_t granted[AC_REGIONS_NUM];
 
     struct {
         uintptr_t frame;
@@ -82,6 +83,7 @@ _Static_assert(offsetof(struct ac_message_t, header) == 0, "non 1st member");
 _Static_assert(offsetof(struct ac_actor_t, base) == 0, "non 1st member");
 _Static_assert(offsetof(struct ac_message_pool_t, base) == 0, "non 1st member");
 _Static_assert(offsetof(struct ac_channel_t, base) == 0, "non 1st member");
+_Static_assert(AC_REGION_STACK == 2, "asm part depends on stack region index");
 
 extern struct ac_channel_t* ac_channel_validate(
     struct ac_actor_t* actor, 
@@ -98,9 +100,16 @@ extern const uintptr_t _ac_task_mem_map[];
 extern struct ac_context_t g_ac_context;
 #define AC_GET_CONTEXT() (&g_ac_context)
 
-static inline void ac_context_init(void) {
+static inline void ac_context_init(uintptr_t ro_base, size_t ro_size) {
+    struct ac_context_t* context = AC_GET_CONTEXT();
+    extern const uint8_t _estack;
+    const uintptr_t idle_stack = (uintptr_t)&_estack - HAL_CONTEXT_SZ;
+    struct hal_mpu_region_t* const idle_mem = context->granted;
+
     mg_context_init();
-    hal_mpu_reset();
+    hal_mpu_region_init(&idle_mem[AC_REGION_FLASH], ro_base, ro_size, AC_ATTR_RO);
+    hal_mpu_region_init(&idle_mem[AC_REGION_STACK], idle_stack, HAL_CONTEXT_SZ, AC_ATTR_RW);
+    hal_mpu_reprogram(AC_REGIONS_NUM, context->granted);
     hal_intr_level(1); /* max possible level for unprivileged actors */
 }
 
@@ -287,7 +296,7 @@ static inline uintptr_t _ac_actor_restore_prev() {
 
     if (prev == 0) {       /* prev = 0 when returning into idle-loop */
         hal_intr_level(0);
-        hal_mpu_reset();
+        hal_mpu_reprogram(AC_REGIONS_NUM, context->granted);
     } else {
         hal_intr_level(prev->base.prio);
         hal_mpu_reprogram(AC_REGIONS_NUM, prev->granted);
@@ -396,7 +405,7 @@ static inline uintptr_t _ac_svc_handler(uint32_t r0, uintptr_t prev_frame) {
     struct ac_actor_t* const actor = context->running_actor;
     uintptr_t frame = prev_frame;
     const uint32_t opcode = r0 >> 28;
-    const uint32_t arg = r0 & 0x0fffffffu;
+    const uint32_t arg = r0 & UINT32_C(0x0fffffff);
     bool sync = opcode > _AC_CALL_LAST_ASYNC;
 
     if (frame && (opcode < AC_CALL_MAX)) {
@@ -439,36 +448,36 @@ static inline uintptr_t _ac_svc_handler(uint32_t r0, uintptr_t prev_frame) {
 
 extern void* _ac_syscall(uintptr_t arg);
 
+static inline uint32_t syscall_val(uint32_t id, uint32_t arg) {
+    return (id << 28) | (arg & UINT32_C(0x0fffffff));
+}
+
 static inline uint32_t act_sleep_for(uint32_t delay) {
-    return (AC_CALL_DELAY << 28) | (delay & UINT32_C(0x0fffffff));
+    return syscall_val(AC_CALL_DELAY, delay);
 }
 
 static inline uint32_t act_subscribe_to(unsigned int id) {
-    return (AC_CALL_SUBSCRIBE << 28) | (id & UINT32_C(0x0fffffff));
+    return syscall_val(AC_CALL_SUBSCRIBE, id);
 }
 
 static inline uint32_t act_async_alloc(unsigned int id) {
-    return (AC_CALL_ALLOC_ASYNC << 28) | (id & UINT32_C(0x0fffffff));
+    return syscall_val(AC_CALL_ALLOC_ASYNC, id);
 }
 
 static inline void* act_try_pop(unsigned int id) {
-    const uint32_t arg = (AC_CALL_TRY_POP << 28) | (id & UINT32_C(0x0fffffff));
-    return _ac_syscall(arg);
+    return _ac_syscall(syscall_val(AC_CALL_TRY_POP, id));
 }
 
 static inline void* act_alloc(unsigned int id) {
-    const uint32_t arg = 
-        (AC_CALL_ALLOC_SYNC << 28) | (id & UINT32_C(0x0fffffff));
-    return _ac_syscall(arg);
+    return _ac_syscall(syscall_val(AC_CALL_ALLOC_SYNC, id));
 }
 
 static inline void* act_push(unsigned int id) {
-    const uint32_t arg = (AC_CALL_PUSH << 28) | (id & UINT32_C(0x0fffffff));
-    return _ac_syscall(arg);
+    return _ac_syscall(syscall_val(AC_CALL_PUSH, id));
 }
 
 static inline void act_free(void) {
-    _ac_syscall(AC_CALL_FREE << 28);
+    (void) _ac_syscall(AC_CALL_FREE << 28);
 }
 
 #define AC_ACTOR_START static int _ac_state = 0; switch(_ac_state) { case 0:

@@ -11,6 +11,10 @@
 #include "core_cm4.h"
 #include "core_cmFunc.h"
 
+enum {
+    HAL_CONTEXT_SZ = 64 // full context size including high registers
+};
+
 struct hal_frame_t {
     uint32_t r0;
     uint32_t r1;
@@ -58,7 +62,6 @@ enum {
 /*     name      |   XN    |  AP[2:0]  | S C B bits | ENABLED */
     AC_ATTR_RO =             (6 << 24) | (2 << 16)  | 1,
     AC_ATTR_RW = (1 << 28) | (3 << 24) | (6 << 16)  | 1,
-    AC_ATTR_XRW=             (3 << 24) | (6 << 16)  | 1,
     AC_ATTR_DEV= (1 << 28) | (3 << 24) | (5 << 16)  | 1,
 };
 
@@ -82,15 +85,11 @@ static inline void hal_mpu_update_region(
     unsigned int i, 
     const struct hal_mpu_region_t* region
 ) {
+    __disable_irq();
     MPU->RBAR = region->addr | (1 << MPU_RBAR_VALID_Pos) | i;
     MPU->RASR = 0;
     MPU->RASR = region->attr;
-}
-
-static inline void hal_mpu_reset(void) {
-    MPU->RBAR = (1 << MPU_RBAR_VALID_Pos);
-    MPU->RASR = 0;
-    MPU->RASR = AC_ATTR_XRW | (31 << MPU_RASR_SIZE_Pos);
+    __enable_irq();
 }
 
 static inline void hal_mpu_reprogram(
