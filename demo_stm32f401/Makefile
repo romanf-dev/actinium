@@ -26,6 +26,7 @@ fwk:
 clean:
 	rm -f *.o *.elf *.0 ldscript.ld
 	$(MAKE) --directory=../core/arch/armv7m clean
+	$(MAKE) --directory=rust_app0 clean
 
 rust_example: fwk
 	$(MAKE) --directory=rust_app0

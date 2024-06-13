@@ -3,5 +3,5 @@ all:
 	cargo build --release
 
 clean:
-	cargo clean
+	rm -rf target
 
