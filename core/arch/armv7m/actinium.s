@@ -166,7 +166,11 @@ exc_return:
     bx      lr
 
 /*
- * The most complex part. 
+ * Called from main while still in privileged mode on MSP stack.
+ * Some actors are already activated and pending, so we can't lower basepri
+ * mask before enabling usermode. But after usermode is enabled via control
+ * reg we will lose access to system registers including basepri.
+ * This is the reason why we need svc here and the special case.
  */
 
 .type ac_kernel_start, %function
