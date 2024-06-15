@@ -83,17 +83,18 @@ ac_intr_entry:
 
 .type ac_trap_entry, %function
 ac_trap_entry:
+    ldr     r0, =0xe000ed24 // Address of SHCSR.
+    ldr     r1, [r0]
+    bfc     r1, #12, #3
+    str     r1, [r0]
     mrs     r1, psp
     ldr     r0, =target
     ldr     r2, =hiregs
     cpsid   i               // Switch hiregs if needed.
     ldr     r3, [r0]        
-    teq     r3, #0
-    itttt   ne
-    stmiane r3, { r4-r11 }
-    ldmiane r2, { r4-r11 }
-    movne   r3, #0          // Set target = 0.
-    strne   r3, [r0]
+    ldmia   r2, { r4-r11 }
+    mov     r3, #0          // Set target = 0.
+    str     r3, [r0]
     cpsie   i
     mrs     r0, ipsr
     bl      ac_trap_handler
@@ -115,9 +116,17 @@ ac_svc_entry:
     dsb
     isb
     bx lr
-syscall:                    // Syscalls are always from usermode, no need 
-    ldr     r1, =target     // to check LR.
-    ldr     r2, =hiregs
+syscall:
+    ldr     r1, =0xe000ed24 // Address of SHCSR.
+    ldr     r2, [r1]
+    lsr     r3, r2, #12
+    tst     r3, #7
+    ittt    ne
+    bfcne   r2, #12, #3
+    strne   r2, [r1]
+    ldrne   r0, =0xffffffff
+    ldr     r1, =target     // Syscalls are always from usermode, no need
+    ldr     r2, =hiregs     // to check LR.
     ldr     r3, [r1]
     cpsid   i               // Switch hiregs unconditionally.
     stmia   r3, { r4-r11 }
@@ -150,10 +159,9 @@ exc_return:
     tst     lr, #4
     itttt   ne
     ldrne   r3, =0xe000ed98 // Read base addr of region 2 if return to thread.
-    strne   r1, [r3]
-    addne   r3, #4
-    ldrne   r2, [r3]
-    bic     r2, #15
+    strne   r1, [r3, #0]    // Set RNR.
+    ldrne   r2, [r3, #4]    // Read RBAR.
+    bicne   r2, #15         // Reset region number bits.
     ldr     r0, =hiregs
     ldr     r1, =target
     cpsid   i

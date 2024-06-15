@@ -21,7 +21,8 @@ enum {
     AC_REGION_STACK,
     AC_REGION_MSG,
     AC_REGION_USER,
-    AC_REGIONS_NUM
+    AC_REGIONS_NUM,
+    AC_RSVD_PRIO_NUM = 1
 };
 
 enum {
@@ -61,12 +62,12 @@ struct ac_context_t {
     struct {
         uintptr_t frame;
         struct ac_actor_t* actor;
-    } preempted[MG_PRIO_MAX - 1];
+    } preempted[MG_PRIO_MAX - AC_RSVD_PRIO_NUM];
 
     struct {
         uintptr_t addr;
         size_t size;
-    } stacks[MG_PRIO_MAX - 1];
+    } stacks[MG_PRIO_MAX - AC_RSVD_PRIO_NUM];
 };
 
 struct ac_message_pool_t {
@@ -205,7 +206,7 @@ static inline void ac_actor_init(
     actor->msg.size = 0;
     actor->msg.type = 0;
 
-    const size_t prio = actor->base.prio - 1;
+    const size_t prio = actor->base.prio - AC_RSVD_PRIO_NUM;
 
     hal_mpu_region_init(
         &region[AC_REGION_FLASH], 
@@ -232,7 +233,7 @@ static inline void ac_actor_init(
 
 static inline uintptr_t _ac_actor_create_frame(struct ac_actor_t* actor) {
     struct ac_context_t* context = AC_GET_CONTEXT();
-    const unsigned int prio = actor->base.prio - 1;
+    const unsigned int prio = actor->base.prio - AC_RSVD_PRIO_NUM;
     const uintptr_t base = context->stacks[prio].addr;
     const uintptr_t size = context->stacks[prio].size;
     const uintptr_t stack_top = base + size;
@@ -258,14 +259,10 @@ static inline uintptr_t _ac_intr_handler(uint32_t vect, uintptr_t old_frame) {
             mg_actor_call(next);
         } else {
             struct ac_actor_t* const actor = (struct ac_actor_t*) next;
-            const unsigned int prio = actor->base.prio - 1;
+            const unsigned int prio = actor->base.prio - AC_RSVD_PRIO_NUM;
 
-            /* frame may be non-0 for the same actor in the case of exception */
-            if (context->preempted[prio].frame == 0) { 
-                context->preempted[prio].frame = frame;
-                context->preempted[prio].actor = context->running_actor;
-            }
-
+            context->preempted[prio].frame = frame;
+            context->preempted[prio].actor = context->running_actor;
             context->running_actor = actor;
             frame = _ac_actor_create_frame(actor);
             hal_intr_level(actor->base.prio);
@@ -283,10 +280,10 @@ static inline uintptr_t _ac_intr_handler(uint32_t vect, uintptr_t old_frame) {
     return frame;
 }
 
-static inline uintptr_t _ac_actor_restore_prev() {
+static inline uintptr_t _ac_actor_restore_prev(void) {
     struct ac_context_t* const context = AC_GET_CONTEXT();
     struct ac_actor_t* const me = context->running_actor;
-    const unsigned int my_prio = me->base.prio - 1;
+    const unsigned int my_prio = me->base.prio - AC_RSVD_PRIO_NUM;
     struct ac_actor_t* const prev = context->preempted[my_prio].actor;
     uintptr_t prev_frame = context->preempted[my_prio].frame;
 
@@ -308,18 +305,11 @@ static inline uintptr_t _ac_actor_restore_prev() {
 static inline uintptr_t ac_actor_exception(void) {
     struct ac_context_t* const context = AC_GET_CONTEXT();
     struct ac_actor_t* const me = context->running_actor;
-    const unsigned int prio = me->base.prio - 1;
     me->restart_req = true;
     _ac_message_release(me, true);
     _mg_actor_activate(&me->base);
 
-    if(context->preempted[prio].actor) {
-        hal_intr_level(context->preempted[prio].actor->base.prio);
-    } else {
-        hal_intr_level(0);
-    }
-
-    return context->preempted[prio].frame;
+    return _ac_actor_restore_prev();
 }
 
 static inline void _ac_sys_timeout(struct ac_actor_t* actor, uintptr_t req) {
@@ -406,9 +396,8 @@ static inline uintptr_t _ac_svc_handler(uint32_t r0, uintptr_t prev_frame) {
     uintptr_t frame = prev_frame;
     const uint32_t opcode = r0 >> 28;
     const uint32_t arg = r0 & UINT32_C(0x0fffffff);
-    bool sync = opcode > _AC_CALL_LAST_ASYNC;
 
-    if (frame && (opcode < AC_CALL_MAX)) {
+    if (opcode < AC_CALL_MAX) {
         switch (opcode) {
         case AC_CALL_DELAY: 
             _ac_sys_timeout(actor, arg);
@@ -432,15 +421,14 @@ static inline uintptr_t _ac_svc_handler(uint32_t r0, uintptr_t prev_frame) {
             _ac_sys_free(actor);
             break;
         }
-    } else {
-        sync = false;
-        ac_actor_exception();
-    }
 
-    if (sync) {
-        hal_frame_set_arg(frame, (uintptr_t)(actor->base.mailbox));
+        if (opcode > _AC_CALL_LAST_ASYNC) {
+            hal_frame_set_arg(frame, (uintptr_t)(actor->base.mailbox));
+        } else {
+            frame = _ac_actor_restore_prev();
+        }
     } else {
-        frame = _ac_actor_restore_prev();
+        frame = ac_actor_exception();
     }
 
     return frame;
@@ -448,32 +436,32 @@ static inline uintptr_t _ac_svc_handler(uint32_t r0, uintptr_t prev_frame) {
 
 extern void* _ac_syscall(uintptr_t arg);
 
-static inline uint32_t syscall_val(uint32_t id, uint32_t arg) {
+static inline uint32_t _ac_syscall_val(uint32_t id, uint32_t arg) {
     return (id << 28) | (arg & UINT32_C(0x0fffffff));
 }
 
 static inline uint32_t act_sleep_for(uint32_t delay) {
-    return syscall_val(AC_CALL_DELAY, delay);
+    return _ac_syscall_val(AC_CALL_DELAY, delay);
 }
 
 static inline uint32_t act_subscribe_to(unsigned int id) {
-    return syscall_val(AC_CALL_SUBSCRIBE, id);
+    return _ac_syscall_val(AC_CALL_SUBSCRIBE, id);
 }
 
 static inline uint32_t act_async_alloc(unsigned int id) {
-    return syscall_val(AC_CALL_ALLOC_ASYNC, id);
+    return _ac_syscall_val(AC_CALL_ALLOC_ASYNC, id);
 }
 
 static inline void* act_try_pop(unsigned int id) {
-    return _ac_syscall(syscall_val(AC_CALL_TRY_POP, id));
+    return _ac_syscall(_ac_syscall_val(AC_CALL_TRY_POP, id));
 }
 
 static inline void* act_alloc(unsigned int id) {
-    return _ac_syscall(syscall_val(AC_CALL_ALLOC_SYNC, id));
+    return _ac_syscall(_ac_syscall_val(AC_CALL_ALLOC_SYNC, id));
 }
 
 static inline void* act_push(unsigned int id) {
-    return _ac_syscall(syscall_val(AC_CALL_PUSH, id));
+    return _ac_syscall(_ac_syscall_val(AC_CALL_PUSH, id));
 }
 
 static inline void act_free(void) {
