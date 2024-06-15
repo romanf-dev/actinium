@@ -1,22 +1,22 @@
 #![no_std]
 #![no_main]
 
+/**
+ ******************************************************************************
+ * @file      lib.rs
+ * @brief     Support for Rust tasks. This code is unprivileged.
+ *****************************************************************************/
+
 pub mod task {
 
+use core::mem;
+use core::ptr;
 use core::marker::PhantomData;
 use core::pin::Pin;
-use core::task::Poll;
-use core::task::Context;
 use core::future::Future;
-use core::mem;
-use core::cell::UnsafeCell;
-use core::cell::Cell;
-use core::ptr;
-use core::task::RawWakerVTable;
-use core::task::RawWaker;
-use core::task::Waker;
-use core::ops::Deref;
-use core::ops::DerefMut;
+use core::task::{Poll, Context, RawWakerVTable, RawWaker, Waker};
+use core::cell::{Cell, UnsafeCell};
+use core::ops::{Deref, DerefMut};
  
 extern "C" {
     fn _ac_syscall(_: u32) -> *mut ();
@@ -71,8 +71,8 @@ impl<T: Send> Drop for MsgOwner<T> {
 
 struct MsgSource<T: Sized + Send + 'static> {
     id: u32,
-    try_syscall_mask: u32,
-    get_syscall_mask: u32,
+    try_scall_mask: u32,
+    await_scall_mask: u32,
     _marker: PhantomData<&'static T>
 }
 
@@ -80,14 +80,14 @@ impl<T: Sized + Send> MsgSource<T> {
     const fn new(id: u32, is_pool: bool) -> Self {
         MsgSource {
             id,
-            try_syscall_mask: if is_pool { SC_POOL_POLL } else { SC_CHAN_POLL },
-            get_syscall_mask: if is_pool { SC_POOL_GET } else { SC_CHAN_GET },
+            try_scall_mask: if is_pool { SC_POOL_POLL } else { SC_CHAN_POLL },
+            await_scall_mask: if is_pool { SC_POOL_GET } else { SC_CHAN_GET },
             _marker: PhantomData
         }
     }
     
     fn try_pop(&self) -> Option<MsgOwner<T>> {
-        let ptr = unsafe { _ac_syscall(self.try_syscall_mask | self.id) };
+        let ptr = unsafe { _ac_syscall(self.try_scall_mask | self.id) };
         if !ptr.is_null() {
             let msg = unsafe { &mut *(ptr as *mut MsgWrapper<T>) };
             Some(MsgOwner::new(msg))
@@ -126,9 +126,9 @@ impl<T: Sized + Send> Future for &MsgSource<T> {
             let msg = unsafe { &mut *(ptr as *mut MsgWrapper<T>) };
             let owner = MsgOwner::new(msg);
             Poll::Ready(owner)
-        } else {
-            let subscr_syscall = self.id | self.get_syscall_mask;
-            IPC.data.set(Some(Mailbox::Subscription(subscr_syscall))); //TODO: try
+        } else { //TODO: try
+            let subscr_syscall = self.id | self.await_scall_mask;
+            IPC.data.set(Some(Mailbox::Subscription(subscr_syscall)));
             Poll::Pending
         }
     }
@@ -315,15 +315,13 @@ pub fn call_once(f: impl FnOnce() -> *mut ()) -> *mut () {
 #[macro_export]
 macro_rules! bind {
     ($msg:ident, $task:ident) => {{
-        use ac::task::size_of;
-        use ac::task::align_of;
-        use ac::task::msg_input;
-        use ac::task::call_once;
-        use ac::task::call;
         use ac::task::FutureStorage;
+        use ac::task::{size_of, align_of, msg_input, call_once, call};
+
         const SZ: usize = size_of(&$task);
         const ALIGN: usize = align_of(&$task);
         static DATA: FutureStorage<{SZ + ALIGN}, {ALIGN}> = FutureStorage::new();
+
         msg_input($msg);
         let ptr = call_once(|| { unsafe { DATA.write($task()) } });
         let syscall = call(ptr, $task);
