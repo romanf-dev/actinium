@@ -4,19 +4,9 @@ to_hex() {
     printf "%x" "$1"
 }
 
-text_section_sz() {
-    local text_sz=0x$(cat $1 | sed -n -E 's/^.*\.text\s+PROGBITS\s+[0-9a-f]+\s+[0-9a-f]+\s+([0-9a-f]+).*/\1/p');
-    echo $text_sz 
-}
-
-data_section_sz() {
-    local data_sz=0x$(cat $1 | sed -n -E 's/^.*\.data\s+PROGBITS\s+[0-9a-f]+\s+[0-9a-f]+\s+([0-9a-f]+).*/\1/p');
-    echo $data_sz 
-}
-
-bss_section_sz() {
-    local bss_sz=0x$(cat $1 | sed -n -E 's/^.*\.bss\s+NOBITS\s+[0-9a-f]+\s+[0-9a-f]+\s+([0-9a-f]+).*/\1/p');
-    echo $bss_sz 
+section_sz() {
+    local sz=$(arm-none-eabi-size -A $1 | sed -n -E "s/^\\$2\s+(\w+).*/\1/p");
+    echo $sz 
 }
 
 round_to_power2() {
@@ -53,10 +43,10 @@ alignas() {
 }
 
 echo "Getting kernel sections info..."
-arm-none-eabi-readelf -S kernel.0 > kernel.tmp
-ktext_sz=$(text_section_sz kernel.tmp);
-kdata_sz=$(data_section_sz kernel.tmp);
-ksram_sz=$(bss_section_sz kernel.tmp);
+ktext_sz=$(section_sz kernel.0 .text);
+kdata_sz=$(section_sz kernel.0 .data);
+ksram_sz=$(section_sz kernel.0 .bss);
+
 ((kdata_sz += 0))
 ((ktext_sz += kdata_sz))
 ((ksram_sz += kdata_sz))
@@ -67,7 +57,6 @@ apps_num=0
 header_size=0
 for f in *.o; do
     echo "Processing of $f object file as slot $apps_num..."
-    arm-none-eabi-readelf -S "$f" > $f.readelf
     arm-none-eabi-objcopy --prefix-symbols task$apps_num $f $f.pfx
     ((apps_num++))
 done
@@ -95,9 +84,9 @@ echo -e "\t.bss : {\n\t\tkernel.0(.bss*)\n\t\tkernel.0(COMMON)\n\t} > KRAM\n" >>
 
 counter=0
 for f in *.o; do
-    text_raw_sz=$(text_section_sz $f.readelf);
-    data_raw_sz=$(data_section_sz $f.readelf);
-    sram_raw_sz=$(bss_section_sz $f.readelf);
+    text_raw_sz=$(section_sz $f .text);
+    data_raw_sz=$(section_sz $f .data);
+    sram_raw_sz=$(section_sz $f .bss);
     ((text_raw_sz += data_raw_sz));
     ((sram_raw_sz += data_raw_sz));
     flash_size=$(round_to_power2 $text_raw_sz);
@@ -125,5 +114,5 @@ echo -e "\t} > KFLASH\n}\n" >> descriptors.ld
 echo "Linking..."
 cat input_list.ld memory_regions.ld sections.ld descriptors.ld > ldscript.ld
 arm-none-eabi-ld -n -o image.elf -T ldscript.ld
-rm input_list.ld memory_regions.ld sections.ld descriptors.ld *.tmp *.readelf *.pfx
+rm input_list.ld memory_regions.ld sections.ld descriptors.ld *.pfx
 
