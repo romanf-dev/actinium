@@ -17,7 +17,7 @@ pub fn panic(_info: &PanicInfo) -> ! {
 }
 
 async fn controller() -> ! {   
-    static CHAN: RecvChannel<Msg> = RecvChannel::new(0);
+    static CHAN: RecvChannel<Msg> = RecvChannel::new(1);
     static TIMER: Timer = Timer::new();
     let ptr = 0x40020818 as *mut u32;
     

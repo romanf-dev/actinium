@@ -48,21 +48,13 @@ uintptr_t ac_trap_handler(uint32_t id, uintptr_t frame) {
     return ac_actor_exception();
 }
 
-static struct ac_channel_t g_chan;
-static struct ac_message_pool_t g_pool;
+static struct ac_channel_t g_chan[2];
 
 struct ac_channel_t* ac_channel_validate(
     struct ac_actor_t* actor, 
     unsigned int handle
 ) {
-    return (handle == 0) ? &g_chan : 0;
-}
-
-struct ac_message_pool_t* ac_pool_validate(
-    struct ac_actor_t* actor, 
-    unsigned int handle
-) {
-    return (handle == 0) ? &g_pool : 0;
+    return (handle < 2) ? &g_chan[handle] : 0;
 }
 
 int main(void) {
@@ -115,8 +107,8 @@ int main(void) {
     g_ac_context.stacks[0].size = sizeof(stack0);
 
     /* create global objects, 1 is used as unique type id, any value may be used */
-    ac_message_pool_init(&g_pool, g_storage, sizeof(g_storage), sizeof(g_storage[0]), 1);
-    ac_channel_init(&g_chan, 1);
+    ac_channel_init(&g_chan[0], g_storage, sizeof(g_storage), sizeof(g_storage[0]), 1);
+    ac_channel_init(&g_chan[1], 0, 0, 0, 1);
 
     /* this chip has 4 priority bits, subpriority is 3:0 */
     NVIC_SetPriorityGrouping(3);

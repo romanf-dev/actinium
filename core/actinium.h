@@ -28,10 +28,8 @@ enum {
 enum {
     AC_CALL_DELAY,
     AC_CALL_SUBSCRIBE,
-    AC_CALL_ALLOC_ASYNC,
-    _AC_CALL_LAST_ASYNC = AC_CALL_ALLOC_ASYNC, /* only sync syscalls below */
+    _AC_CALL_LAST_ASYNC = AC_CALL_SUBSCRIBE, /* only sync syscalls below */
     AC_CALL_TRY_POP,
-    AC_CALL_ALLOC_SYNC,
     AC_CALL_PUSH,
     AC_CALL_FREE,
     AC_CALL_MAX
@@ -49,7 +47,7 @@ struct ac_actor_t {
     bool restart_req;
 
     struct {
-        struct ac_message_pool_t* parent;
+        struct ac_channel_t* parent;
         size_t size;
         int type;
     } msg;
@@ -70,28 +68,17 @@ struct ac_context_t {
     } stacks[MG_PRIO_MAX - AC_RSVD_PRIO_NUM];
 };
 
-struct ac_message_pool_t {
-    struct mg_message_pool_t base;
-    int msg_type;
-};
-
 struct ac_channel_t {
-    struct mg_queue_t base;
+    struct mg_message_pool_t base;
     int msg_type;
 };
 
 _Static_assert(offsetof(struct ac_message_t, header) == 0, "non 1st member");
 _Static_assert(offsetof(struct ac_actor_t, base) == 0, "non 1st member");
-_Static_assert(offsetof(struct ac_message_pool_t, base) == 0, "non 1st member");
 _Static_assert(offsetof(struct ac_channel_t, base) == 0, "non 1st member");
 _Static_assert(AC_REGION_STACK == 2, "asm part depends on stack region index");
 
 extern struct ac_channel_t* ac_channel_validate(
-    struct ac_actor_t* actor, 
-    unsigned int handle
-);
-
-extern struct ac_message_pool_t* ac_pool_validate(
     struct ac_actor_t* actor, 
     unsigned int handle
 );
@@ -114,8 +101,8 @@ static inline void ac_context_init(uintptr_t ro_base, size_t ro_size) {
     hal_intr_level(1); /* max possible level for unprivileged actors */
 }
 
-static inline void ac_message_pool_init(
-    struct ac_message_pool_t* pool, 
+static inline void ac_channel_init(
+    struct ac_channel_t* chan, 
     void* mem, 
     size_t total_len, 
     size_t block_sz,
@@ -123,12 +110,12 @@ static inline void ac_message_pool_init(
 ) {
     assert((block_sz & (block_sz - 1)) == 0);
     assert((((uintptr_t)mem) & (block_sz - 1)) == 0);
-    mg_message_pool_init(&pool->base, mem, total_len, block_sz);
-    pool->msg_type = msg_type;
-}
-
-static inline void ac_channel_init(struct ac_channel_t* chan, int msg_type) {
-    mg_queue_init(&chan->base);
+    mg_queue_init(&chan->base.queue);
+    chan->base.array = mem;
+    chan->base.total_length = total_len;
+    chan->base.block_sz = block_sz;
+    chan->base.offset = 0;
+    chan->base.array_space_available = (total_len != 0);
     chan->msg_type = msg_type;
 }
 
@@ -136,7 +123,7 @@ static inline void _ac_message_set(struct ac_actor_t* actor) {
     struct ac_message_t* const msg = (struct ac_message_t*) actor->base.mailbox;
 
     if (msg && (actor->msg.parent == 0)) {
-        struct ac_message_pool_t* const parent = (void*) msg->header.parent;
+        struct ac_channel_t* const parent = (void*) msg->header.parent;
         struct hal_mpu_region_t* region = &actor->granted[AC_REGION_MSG];       
         actor->msg.parent = parent;
         actor->msg.type = parent->msg_type;
@@ -177,7 +164,7 @@ static inline void _ac_channel_push(
         if (src->msg.type == dst->msg_type) { /* typechecking */
             msg->poisoned = 0;
             _ac_message_cleanup(src);
-            mg_queue_push(&dst->base, &msg->header);
+            mg_queue_push(&dst->base.queue, &msg->header);
         }
     }
 }
@@ -327,10 +314,14 @@ static inline void _ac_sys_subscribe(struct ac_actor_t* actor, uintptr_t req) {
 
     if (chan) {
         _ac_message_release(actor, false);
-        struct mg_message_t* const msg = mg_queue_pop(&chan->base, &actor->base);
+        struct ac_message_t* msg = mg_message_alloc(&chan->base);
+        
+        if (msg == 0) {
+            msg = (void*) mg_queue_pop(&chan->base.queue, &actor->base);
+        }
 
         if (msg) {
-            actor->base.mailbox = msg;
+            actor->base.mailbox = &msg->header;
             _mg_actor_activate(&actor->base);
         }
     }
@@ -350,18 +341,7 @@ static inline void _ac_sys_trypop(struct ac_actor_t* actor, uintptr_t req) {
 
     if (chan) {
         _ac_message_release(actor, false);
-        actor->base.mailbox = mg_queue_pop(&chan->base, 0);
-        _ac_message_set(actor);
-        hal_mpu_update_region(AC_REGION_MSG, &actor->granted[AC_REGION_MSG]);
-    }
-}
-
-static inline void _ac_sys_alloc(struct ac_actor_t* actor, uintptr_t req) {
-    struct ac_message_pool_t* const pool = ac_pool_validate(actor, req);
-
-    if (pool) {
-        _ac_message_release(actor, false);
-        actor->base.mailbox = mg_message_alloc(&pool->base);
+        actor->base.mailbox = mg_message_alloc(&chan->base);
         _ac_message_set(actor);
         hal_mpu_update_region(AC_REGION_MSG, &actor->granted[AC_REGION_MSG]);
     }
@@ -370,24 +350,6 @@ static inline void _ac_sys_alloc(struct ac_actor_t* actor, uintptr_t req) {
 static inline void _ac_sys_free(struct ac_actor_t* actor) {
     _ac_message_release(actor, false);
     hal_mpu_update_region(AC_REGION_MSG, &actor->granted[AC_REGION_MSG]);
-}
-
-static inline void _ac_sys_alloc_async(struct ac_actor_t* actor, uintptr_t req) {
-    struct ac_message_pool_t* const pool = ac_pool_validate(actor, req);
-
-    if (pool) {
-        _ac_message_release(actor, false);
-        struct ac_message_t* msg = mg_message_alloc(&pool->base);
-        
-        if (msg == 0) {
-            msg = (void*) mg_queue_pop(&pool->base.queue, &actor->base);
-        }
-
-        if (msg) {
-            actor->base.mailbox = &msg->header;
-            _mg_actor_activate(&actor->base);
-        }
-    }
 }
 
 static inline uintptr_t _ac_svc_handler(uint32_t r0, uintptr_t prev_frame) {
@@ -405,14 +367,8 @@ static inline uintptr_t _ac_svc_handler(uint32_t r0, uintptr_t prev_frame) {
         case AC_CALL_SUBSCRIBE: 
             _ac_sys_subscribe(actor, arg); 
             break;
-        case AC_CALL_ALLOC_ASYNC:
-            _ac_sys_alloc_async(actor, arg);
-            break;
         case AC_CALL_TRY_POP:
             _ac_sys_trypop(actor, arg);
-            break;
-        case AC_CALL_ALLOC_SYNC:
-            _ac_sys_alloc(actor, arg);
             break;
         case AC_CALL_PUSH: 
             _ac_sys_push(actor, arg);
@@ -448,16 +404,8 @@ static inline uint32_t act_subscribe_to(unsigned int id) {
     return _ac_syscall_val(AC_CALL_SUBSCRIBE, id);
 }
 
-static inline uint32_t act_async_alloc(unsigned int id) {
-    return _ac_syscall_val(AC_CALL_ALLOC_ASYNC, id);
-}
-
 static inline void* act_try_pop(unsigned int id) {
     return _ac_syscall(_ac_syscall_val(AC_CALL_TRY_POP, id));
-}
-
-static inline void* act_alloc(unsigned int id) {
-    return _ac_syscall(_ac_syscall_val(AC_CALL_ALLOC_SYNC, id));
 }
 
 static inline void* act_push(unsigned int id) {

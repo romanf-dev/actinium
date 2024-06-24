@@ -21,10 +21,10 @@ uint32_t main(void) {
     for (;;) {
         AC_AWAIT(act_sleep_for(1000));
 
-        struct led_msg_t* msg = act_alloc(0);
+        struct led_msg_t* msg = act_try_pop(0);
         msg->control = (state ^= 1);
 
-        act_push(0);
+        act_push(1);
 
         if (++counter == 20) {
             crash();

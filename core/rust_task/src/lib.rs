@@ -24,11 +24,9 @@ extern "C" {
 
 const SC_DELAY: u32 = 0x00000000;
 const SC_CHAN_GET: u32 = 0x10000000;
-const SC_POOL_GET: u32 = 0x20000000;
-const SC_CHAN_POLL: u32 = 0x30000000;
-const SC_POOL_POLL: u32 = 0x40000000;
-const SC_SEND_MSG: u32 = 0x50000000;
-const SC_FREE_MSG: u32 = 0x60000000;
+const SC_CHAN_POLL: u32 = 0x20000000;
+const SC_SEND_MSG: u32 = 0x30000000;
+const SC_FREE_MSG: u32 = 0x40000000;
 
 #[repr(C)]
 struct MsgWrapper<T> {
@@ -71,23 +69,19 @@ impl<T: Send> Drop for MsgOwner<T> {
 
 struct MsgSource<T: Sized + Send + 'static> {
     id: u32,
-    try_scall_mask: u32,
-    await_scall_mask: u32,
     _marker: PhantomData<&'static T>
 }
 
 impl<T: Sized + Send> MsgSource<T> {
-    const fn new(id: u32, is_pool: bool) -> Self {
+    const fn new(id: u32) -> Self {
         MsgSource {
             id,
-            try_scall_mask: if is_pool { SC_POOL_POLL } else { SC_CHAN_POLL },
-            await_scall_mask: if is_pool { SC_POOL_GET } else { SC_CHAN_GET },
             _marker: PhantomData
         }
     }
     
     fn try_pop(&self) -> Option<MsgOwner<T>> {
-        let ptr = unsafe { _ac_syscall(self.try_scall_mask | self.id) };
+        let ptr = unsafe { _ac_syscall(SC_CHAN_POLL | self.id) };
         if !ptr.is_null() {
             let msg = unsafe { &mut *(ptr as *mut MsgWrapper<T>) };
             Some(MsgOwner::new(msg))
@@ -127,8 +121,7 @@ impl<T: Sized + Send> Future for &MsgSource<T> {
             let owner = MsgOwner::new(msg);
             Poll::Ready(owner)
         } else { //TODO: try
-            let subscr_syscall = self.id | self.await_scall_mask;
-            IPC.data.set(Some(Mailbox::Subscription(subscr_syscall)));
+            IPC.data.set(Some(Mailbox::Subscription(self.id | SC_CHAN_GET)));
             Poll::Pending
         }
     }
@@ -141,7 +134,7 @@ pub struct RecvChannel<T: Sized + Send + 'static> {
 impl<T: Sized + Send> RecvChannel<T> {
     pub const fn new(id: u32) -> Self {
         Self {
-            src: MsgSource::<T>::new(id, false)
+            src: MsgSource::<T>::new(id)
         }
     }
     
@@ -172,26 +165,6 @@ impl<T: Sized + Send> SendChannel<T> {
         unsafe {
             _ac_syscall(self.id | SC_SEND_MSG);
         }
-    }
-}
-
-pub struct Pool<T: Sized + Send + 'static> {
-    src: MsgSource<T>
-}
-
-impl<T: Sized + Send> Pool<T> {
-    pub const fn new(id: u32) -> Self {
-        Pool {
-            src: MsgSource::<T>::new(id, true)
-        }
-    }
-    
-    pub fn try_pop(&self) -> Option<MsgOwner<T>> {
-        self.src.try_pop()
-    }
-    
-    pub async fn get(&self) -> MsgOwner<T> {
-        (&self.src).await
     }
 }
 
