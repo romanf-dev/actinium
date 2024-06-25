@@ -67,20 +67,20 @@ impl<T: Send> Drop for MsgOwner<T> {
     }
 }
 
-struct MsgSource<T: Sized + Send + 'static> {
+pub struct RecvChannel<T: Sized + Send + 'static> {
     id: u32,
     _marker: PhantomData<&'static T>
 }
 
-impl<T: Sized + Send> MsgSource<T> {
-    const fn new(id: u32) -> Self {
-        MsgSource {
+impl<T: Sized + Send> RecvChannel<T> {
+    pub const fn new(id: u32) -> Self {
+        Self {
             id,
             _marker: PhantomData
         }
     }
     
-    fn try_pop(&self) -> Option<MsgOwner<T>> {
+    pub fn try_pop(&self) -> Option<MsgOwner<T>> {
         let ptr = unsafe { _ac_syscall(SC_CHAN_POLL | self.id) };
         if !ptr.is_null() {
             let msg = unsafe { &mut *(ptr as *mut MsgWrapper<T>) };
@@ -88,6 +88,10 @@ impl<T: Sized + Send> MsgSource<T> {
         } else {
             None
         }
+    }
+    
+    pub async fn get(&self) -> MsgOwner<T> {
+        self.await
     }
 }
 
@@ -113,7 +117,7 @@ unsafe impl<T> Sync for Global<T> {}
 
 static IPC: Global<Mailbox> = Global::new();
 
-impl<T: Sized + Send> Future for &MsgSource<T> {
+impl<T: Sized + Send> Future for &RecvChannel<T> {
     type Output = MsgOwner<T>;
     fn poll(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
         if let Some(Mailbox::Message(ptr)) = IPC.data.take() {
@@ -124,26 +128,6 @@ impl<T: Sized + Send> Future for &MsgSource<T> {
             IPC.data.set(Some(Mailbox::Subscription(self.id | SC_CHAN_GET)));
             Poll::Pending
         }
-    }
-}
-
-pub struct RecvChannel<T: Sized + Send + 'static> {
-    src: MsgSource<T>
-}
-
-impl<T: Sized + Send> RecvChannel<T> {
-    pub const fn new(id: u32) -> Self {
-        Self {
-            src: MsgSource::<T>::new(id)
-        }
-    }
-    
-    pub fn try_pop(&self) -> Option<MsgOwner<T>> {
-        self.src.try_pop()
-    }
-    
-    pub async fn get(&self) -> MsgOwner<T> {
-        (&self.src).await
     }
 }
 
@@ -302,4 +286,3 @@ macro_rules! bind {
     }}
 }
 }
-
