@@ -81,14 +81,21 @@ static inline void hal_mpu_region_init(
     region->attr = size ? (size_mask | attr) : 0;
 }
 
+static inline void hal_mpu_update_region_nosync(
+    unsigned int i, 
+    const struct hal_mpu_region_t* region
+) {
+    MPU->RBAR = region->addr | (1 << MPU_RBAR_VALID_Pos) | i;
+    MPU->RASR = 0;
+    MPU->RASR = region->attr;
+}
+
 static inline void hal_mpu_update_region(
     unsigned int i, 
     const struct hal_mpu_region_t* region
 ) {
     __disable_irq();
-    MPU->RBAR = region->addr | (1 << MPU_RBAR_VALID_Pos) | i;
-    MPU->RASR = 0;
-    MPU->RASR = region->attr;
+    hal_mpu_update_region_nosync(i, region);
     __enable_irq();
 }
 
@@ -99,7 +106,7 @@ static inline void hal_mpu_reprogram(
     __disable_irq();
 
     for (size_t i = 0; i < sz; ++i) {
-        hal_mpu_update_region(i, &regions[i]);
+        hal_mpu_update_region_nosync(i, &regions[i]);
     }
 
     __enable_irq();
