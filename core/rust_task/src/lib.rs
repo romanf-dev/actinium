@@ -36,27 +36,27 @@ extern "C" {
 }
 
 #[repr(C)]
-struct MsgWrapper<T> {
+struct Msg<T> {
     header: MsgHeader,
     payload: T
 }
 
-unsafe fn msg_typecast<'a, T: Sized + Send>(ptr: *mut MsgHeader) -> &'a mut MsgWrapper<T> {
+unsafe fn msg_typecast<'a, T: Send>(ptr: *mut MsgHeader) -> &'a mut Msg<T> {
     let msg = &mut *(ptr as *mut MsgHeader);
-    if msg.size as usize == mem::size_of::<MsgWrapper<T>>() {
-        let msg = &mut *(ptr as *mut MsgWrapper<T>);
+    if msg.size as usize == mem::size_of::<Msg<T>>() {
+        let msg = &mut *(ptr as *mut Msg<T>);
         msg
     } else {
         panic!("mismatched msg sizes");
     }
 }
 
-pub struct MsgOwner<T: Sized + Send + 'static> {
-    msg_ref: &'static mut MsgWrapper<T>
+pub struct Envelope<T: Sized + Send + 'static> {
+    msg_ref: &'static mut Msg<T>
 }
 
-impl<T: Sized + Send> MsgOwner<T> {
-    fn new(msg_ref: &'static mut MsgWrapper<T>) -> Self {
+impl<T: Sized + Send> Envelope<T> {
+    fn new(msg_ref: &'static mut Msg<T>) -> Self {
         Self {
             msg_ref
         }
@@ -67,20 +67,20 @@ impl<T: Sized + Send> MsgOwner<T> {
     }    
 }
 
-impl<T: Send> Deref for MsgOwner<T> {
+impl<T: Send> Deref for Envelope<T> {
     type Target = T;
     fn deref(&self) -> &T {
         &self.msg_ref.payload
     }
 }
 
-impl<T: Send> DerefMut for MsgOwner<T> {
+impl<T: Send> DerefMut for Envelope<T> {
     fn deref_mut(&mut self) -> &mut T {
         &mut self.msg_ref.payload
     }
 }
 
-impl<T: Send> Drop for MsgOwner<T> {
+impl<T: Send> Drop for Envelope<T> {
     fn drop(&mut self) {
         unsafe {
             _ac_syscall(SC_FREE_MSG);
@@ -101,17 +101,17 @@ impl<T: Sized + Send> RecvChannel<T> {
         }
     }
     
-    pub fn try_pop(&self) -> Option<MsgOwner<T>> {
+    pub fn try_pop(&self) -> Option<Envelope<T>> {
         let ptr = unsafe { _ac_syscall(SC_CHAN_POLL | self.id) };
         if !ptr.is_null() {
             let msg = unsafe { msg_typecast::<T>(ptr) };
-            Some(MsgOwner::new(msg))
+            Some(Envelope::new(msg))
         } else {
             None
         }
     }
     
-    pub async fn get(&self) -> MsgOwner<T> {
+    pub async fn get(&self) -> Envelope<T> {
         self.await
     }
 }
@@ -139,13 +139,12 @@ unsafe impl<T> Sync for Global<T> {}
 static IPC: Global<Mailbox> = Global::new();
 
 impl<T: Sized + Send> Future for &RecvChannel<T> {
-    type Output = MsgOwner<T>;
+    type Output = Envelope<T>;
     fn poll(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
         if let Some(Mailbox::Message(ptr)) = IPC.data.take() {
             let msg = unsafe { msg_typecast::<T>(ptr) };
-            let owner = MsgOwner::new(msg);
-            Poll::Ready(owner)
-        } else { //TODO: try
+            Poll::Ready(Envelope::new(msg))
+        } else {
             IPC.data.set(Some(Mailbox::Subscription(self.id | SC_CHAN_GET)));
             Poll::Pending
         }
@@ -165,8 +164,8 @@ impl<T: Sized + Send> SendChannel<T> {
         }
     }
     
-    pub fn send(&mut self, _msg: MsgOwner<T>) {
-        mem::forget(_msg);
+    pub fn send(&mut self, _msg: Envelope<T>) {
+        mem::forget(_msg); /* Message is not owned after SEND, no need for drop. */
         unsafe {
             _ac_syscall(self.id | SC_SEND_MSG);
         }
@@ -260,7 +259,7 @@ pub fn call<F: Future + 'static>(ptr: *mut (), f: impl FnOnce() -> F) -> u32 {
     }
     
     if let Some(Mailbox::Subscription(syscall)) = IPC.data.take() {
-        if (syscall >> 28) != 0 { // TODO: remove this hack
+        if (syscall >> 28) != 0 {
             IPC.data.set(Some(Mailbox::MessageWaiting));
         }
         syscall

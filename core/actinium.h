@@ -93,13 +93,16 @@ _Static_assert(offsetof(struct ac_channel_t, base) == 0, "non 1st member");
 _Static_assert(AC_REGION_STACK == 2, "asm part depends on stack region index");
 _Static_assert(sizeof(struct ac_message_t) == sizeof(uintptr_t) * 4, "pad");
 
+extern void noreturn ac_kernel_start(void);
+extern void* ac_intr_handler(uint32_t vect, void* frame);
+extern void* ac_svc_handler(uint32_t arg, void* frame);
+extern void* ac_trap_handler(uint32_t exception_id);
 extern struct ac_channel_t* ac_channel_validate(
     struct ac_actor_t* caller, 
     unsigned int handle,
     bool is_write
 );
 
-extern void noreturn ac_kernel_start(void);
 extern struct ac_context_t g_ac_context;
 #define AC_GET_CONTEXT() (&g_ac_context)
 
@@ -119,8 +122,10 @@ static inline void ac_context_init(uintptr_t ro_base, size_t ro_size) {
 static inline void ac_context_stack_set(unsigned prio, size_t sz, void* ptr) {
     struct ac_context_t* const context = AC_GET_CONTEXT();
     const unsigned int level = prio - AC_RSVD_PRIO_NUM;
+
     assert((sz & (sz - 1)) == 0);
     assert(prio >= AC_RSVD_PRIO_NUM);
+    assert(sz > HAL_CONTEXT_SZ);
     context->stacks[level].addr = (uintptr_t) ptr;
     context->stacks[level].size = sz;
 }
@@ -224,7 +229,7 @@ static inline void ac_actor_init(
     actor->msg.size = 0;
     actor->msg.type = 0;
 
-    const unsigned int prio = actor->base.prio - AC_RSVD_PRIO_NUM;
+    const unsigned int level = actor->base.prio - AC_RSVD_PRIO_NUM;
     struct ac_context_t* const context = AC_GET_CONTEXT();
 
     hal_region_init(
@@ -241,11 +246,10 @@ static inline void ac_actor_init(
     );
     hal_region_init(
         &regions[AC_REGION_STACK], 
-        context->stacks[prio].addr, 
-        context->stacks[prio].size, 
+        context->stacks[level].addr, 
+        context->stacks[level].size, 
         AC_ATTR_RW
     );
-
     hal_region_init(&regions[AC_REGION_MSG], 0, 0, AC_ATTR_RW);
     _mg_actor_activate(&actor->base);
 }
@@ -264,11 +268,11 @@ static inline struct hal_frame_t* _ac_frame_create(struct ac_actor_t* actor) {
     const struct ac_context_t* const context = AC_GET_CONTEXT();
     const unsigned int prio = actor->base.prio - AC_RSVD_PRIO_NUM;
     const uintptr_t base = context->stacks[prio].addr;
-    const uintptr_t size = context->stacks[prio].size;
+    const size_t size = context->stacks[prio].size;
     const uintptr_t stack_top = base + size;
     const bool restart_req = actor->restart_req;
+
     actor->restart_req = false;
-    
     assert(base != 0);
     return hal_frame_alloc(stack_top, actor->func, restart_req);
 }
@@ -285,17 +289,17 @@ static inline struct hal_frame_t* _ac_intr_handler(
         struct mg_actor_t* const next = _mg_context_pop_head(vect, &last);
         
         if (!next) {
-            break; 
+            break; /* Spurious interrupt. No active actor at this level. */
         }
 
         if (next->func) {
             mg_actor_call(next);
         } else {
             struct ac_actor_t* const actor = (struct ac_actor_t*) next;
-            const unsigned int prio = actor->base.prio - AC_RSVD_PRIO_NUM;
+            const unsigned int level = actor->base.prio - AC_RSVD_PRIO_NUM;
 
-            context->preempted[prio].frame = frame;
-            context->preempted[prio].actor = context->running_actor;
+            context->preempted[level].frame = frame;
+            context->preempted[level].actor = context->running_actor;
             context->running_actor = actor;
             frame = _ac_frame_create(actor);
             hal_intr_level(actor->base.prio);
@@ -481,3 +485,4 @@ static inline void act_free(void) {
 
 #endif /* ifndef AC_TASK */
 #endif /* header guard */
+
