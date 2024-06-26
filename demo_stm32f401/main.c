@@ -33,28 +33,30 @@ void __assert_func(
     Error_Handler();
 }
 
-uintptr_t ac_intr_handler(uint32_t vect, uintptr_t old_frame) {
+struct hal_frame_t* ac_intr_handler(uint32_t vect, struct hal_frame_t* old_frame) {
     return _ac_intr_handler(vect, old_frame);
 }
 
-uintptr_t ac_svc_handler(uint32_t r0, uintptr_t old_frame) {
+struct hal_frame_t* ac_svc_handler(uint32_t r0, struct hal_frame_t* old_frame) {
     return _ac_svc_handler(r0, old_frame);
+}
+
+struct hal_frame_t* ac_trap_handler(uint32_t id, struct hal_frame_t* frame) {
+    return ac_actor_exception();
 }
 
 struct mg_context_t g_mg_context;
 struct ac_context_t g_ac_context; 
 
-uintptr_t ac_trap_handler(uint32_t id, uintptr_t frame) {
-    return ac_actor_exception();
-}
-
 static struct ac_channel_t g_chan[2];
 
 struct ac_channel_t* ac_channel_validate(
     struct ac_actor_t* actor, 
-    unsigned int handle
+    unsigned int handle,
+    bool is_write
 ) {
-    return (handle < 2) ? &g_chan[handle] : 0;
+    const size_t max_id = sizeof(g_chan) / sizeof(g_chan[0]);
+    return (handle < max_id) ? &g_chan[handle] : 0;
 }
 
 int main(void) {
@@ -103,12 +105,11 @@ int main(void) {
     ac_context_init(0x08000000, 0x40000);
 
     /* both actors share the same priority so there's only one stack */
-    g_ac_context.stacks[0].addr = (uintptr_t)stack0;
-    g_ac_context.stacks[0].size = sizeof(stack0);
+    ac_context_stack_set(1, sizeof(stack0), stack0);
 
     /* create global objects, 1 is used as unique type id, any value may be used */
-    ac_channel_init(&g_chan[0], g_storage, sizeof(g_storage), sizeof(g_storage[0]), 1);
-    ac_channel_init(&g_chan[1], 0, 0, 0, 1);
+    ac_channel_init_ex(&g_chan[0], sizeof(g_storage), g_storage, sizeof(g_storage[0]), 1);
+    ac_channel_init(&g_chan[1], 1);
 
     /* this chip has 4 priority bits, subpriority is 3:0 */
     NVIC_SetPriorityGrouping(3);
@@ -122,7 +123,7 @@ int main(void) {
 
     /* create 'controller' actor and allow to access GPIOC */
     ac_actor_init(&g_handler, 0, 0);
-    hal_mpu_region_init(&g_handler.granted[AC_REGION_USER], GPIOC_BASE, 64, AC_ATTR_DEV);
+    ac_actor_allow(&g_handler, 64, (void*)GPIOC_BASE, AC_ATTR_DEV);
 
     /* create 'sender actor '*/
     ac_actor_init(&g_sender, 1, 1);

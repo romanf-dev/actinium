@@ -6,6 +6,9 @@ GCC_PREFIX ?= arm-none-eabi-
 %.o : %.c
 	$(GCC_PREFIX)gcc -pedantic -ffreestanding -mcpu=cortex-m4 -DMG_NVIC_PRIO_BITS=4 -Wall -I ../core -I ../core/arch/armv7m -I ../magnesium -I ../magnesium/nvic -O2 -mthumb -I . -c -o $@ $<
 
+task%.o : task%.c
+	$(GCC_PREFIX)gcc -pedantic -ffreestanding -mcpu=cortex-m4 -Wall -DAC_TASK -I ../core -I ../core/arch/armv7m -O2 -mthumb -I . -c -o $@ $<
+
 %.o : %.s
 	$(GCC_PREFIX)gcc -mcpu=cortex-m4 -mthumb -c -o $@ $<
 
