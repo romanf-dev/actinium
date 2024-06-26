@@ -33,15 +33,15 @@ void __assert_func(
     Error_Handler();
 }
 
-struct hal_frame_t* ac_intr_handler(uint32_t vect, struct hal_frame_t* old_frame) {
-    return _ac_intr_handler(vect, old_frame);
+void* ac_intr_handler(uint32_t vect, void* frame) {
+    return _ac_intr_handler(vect, frame);
 }
 
-struct hal_frame_t* ac_svc_handler(uint32_t r0, struct hal_frame_t* old_frame) {
-    return _ac_svc_handler(r0, old_frame);
+void* ac_svc_handler(uint32_t arg, void* frame) {
+    return _ac_svc_handler(arg, frame);
 }
 
-struct hal_frame_t* ac_trap_handler(uint32_t id, struct hal_frame_t* frame) {
+void* ac_trap_handler(uint32_t id) {
     return ac_actor_exception();
 }
 
@@ -65,8 +65,9 @@ int main(void) {
     static alignas(1024) uint8_t stack0[1024];
     static alignas(sizeof(struct led_msg_t)) struct led_msg_t g_storage[3];
 
-    /* setup clocks and other hardware stuff... */
-
+    /* 
+     * Setup clocks and other hardware stuff...
+     */
     RCC->CR |= RCC_CR_HSEON;            
     while((RCC->CR & RCC_CR_HSERDY) == 0) {
         ;
@@ -89,52 +90,81 @@ int main(void) {
 
     RCC->CR &= ~RCC_CR_HSION;
 
-    /* enable LED */
+    /* 
+     * Enable LED. 
+     */
     RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
     GPIOC->MODER |= GPIO_MODER_MODER13_0;
 
-    /* enable all exceptions */
-    SCB->SHCSR |= ( 7 << 16 );
+    /* 
+     * Enable all exceptions.
+     */
+    SCB->SHCSR |= SCB_SHCSR_USGFAULTENA_Msk;
+    SCB->SHCSR |= SCB_SHCSR_BUSFAULTENA_Msk;
+    SCB->SHCSR |= SCB_SHCSR_MEMFAULTENA_Msk;
     
-    /* enable MPU with default memory map */
+    /* 
+     * Enable MPU with default memory map.
+     */
     MPU->CTRL = MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_ENABLE_Msk;
     __DSB();
     __ISB();
     
-    /* base address of flash and its size */
+    /* 
+     * Base address of flash and its size.
+     */
     ac_context_init(0x08000000, 0x40000);
 
-    /* both actors share the same priority so there's only one stack */
+    /* 
+     * Both actors share the same priority so there's only one stack for prio 1.
+     */
     ac_context_stack_set(1, sizeof(stack0), stack0);
 
-    /* create global objects, 1 is used as unique type id, any value may be used */
+    /* 
+     * Create global objects, 1 is used as unique type id, any value may be used.
+     */
     ac_channel_init_ex(&g_chan[0], sizeof(g_storage), g_storage, sizeof(g_storage[0]), 1);
     ac_channel_init(&g_chan[1], 1);
 
-    /* this chip has 4 priority bits, subpriority is 3:0 */
+    /* 
+     * This chip has 4 priority bits, subpriority is 3:0.
+     */
     NVIC_SetPriorityGrouping(3);
 
-    /* enable two first vectors and set priotity 1, the maximum priority for 
-    unprivileged actors */
+    /* 
+     * Enable two first vectors and set priotity 1, the maximum priority for 
+     * unprivileged actors.
+     */
     NVIC_SetPriority(0, 1);
     NVIC_SetPriority(1, 1);
     NVIC_EnableIRQ(0);
     NVIC_EnableIRQ(1);
 
-    /* create 'controller' actor and allow to access GPIOC */
+    /* 
+     * Create the 'controller' actor and allow to access GPIOC.
+     * The second argument is interrupt vector. Third argument is binary file
+     * id. 
+     */
     ac_actor_init(&g_handler, 0, 0);
     ac_actor_allow(&g_handler, 64, (void*)GPIOC_BASE, AC_ATTR_DEV);
 
-    /* create 'sender actor '*/
+    /* 
+     * Create the 'sender' actor, who sends messages to the 'controller'.
+     */
     ac_actor_init(&g_sender, 1, 1);
 
-    /* initialize tick source for 1 ms */
-    SysTick->LOAD  = 84000U - 1U;
-    SysTick->VAL   = 0;
-    SysTick->CTRL  = 7;
+    /* 
+     * Initialize tick source for 1 ms.
+     */
+    SysTick->LOAD = 84000U - 1U;
+    SysTick->VAL = 0;
+    SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_ENABLE_Msk;
 
+    /* 
+     * Does not return... 
+     */
     ac_kernel_start();
 
-    return 0; /* make compiler happy. */
+    return 0; /* Make compiler happy. */
 }
 
