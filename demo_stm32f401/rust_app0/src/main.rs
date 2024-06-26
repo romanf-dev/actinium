@@ -19,8 +19,10 @@ pub fn panic(_info: &PanicInfo) -> ! {
     loop {}
 }
 
+#[repr(C)]
 struct Msg {
-    control: u32
+    control: u32,
+    _padding: [u32; 3]
 }
 
 async fn controller() -> ! {   

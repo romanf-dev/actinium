@@ -18,10 +18,6 @@ use core::task::{Poll, Context, RawWakerVTable, RawWaker, Waker};
 use core::cell::{Cell, UnsafeCell};
 use core::ops::{Deref, DerefMut};
  
-extern "C" {
-    fn _ac_syscall(_: u32) -> *mut ();
-}
-
 const SC_DELAY: u32 = 0x00000000;
 const SC_CHAN_GET: u32 = 0x10000000;
 const SC_CHAN_POLL: u32 = 0x20000000;
@@ -29,9 +25,30 @@ const SC_SEND_MSG: u32 = 0x30000000;
 const SC_FREE_MSG: u32 = 0x40000000;
 
 #[repr(C)]
+struct MsgHeader {
+    size: u32,
+    _padding: [u32; 2],
+    poisoned: u32
+}
+
+extern "C" {
+    fn _ac_syscall(_: u32) -> *mut MsgHeader;
+}
+
+#[repr(C)]
 struct MsgWrapper<T> {
-    _header: [u32; 4],
+    header: MsgHeader,
     payload: T
+}
+
+unsafe fn msg_typecast<'a, T: Sized + Send>(ptr: *mut MsgHeader) -> &'a mut MsgWrapper<T> {
+    let msg = &mut *(ptr as *mut MsgHeader);
+    if msg.size as usize == mem::size_of::<MsgWrapper<T>>() {
+        let msg = &mut *(ptr as *mut MsgWrapper<T>);
+        msg
+    } else {
+        panic!("mismatched msg sizes");
+    }
 }
 
 pub struct MsgOwner<T: Sized + Send + 'static> {
@@ -44,6 +61,10 @@ impl<T: Sized + Send> MsgOwner<T> {
             msg_ref
         }
     }
+    
+    pub fn is_poisoned(&self) -> bool {
+        self.msg_ref.header.poisoned != 0
+    }    
 }
 
 impl<T: Send> Deref for MsgOwner<T> {
@@ -83,7 +104,7 @@ impl<T: Sized + Send> RecvChannel<T> {
     pub fn try_pop(&self) -> Option<MsgOwner<T>> {
         let ptr = unsafe { _ac_syscall(SC_CHAN_POLL | self.id) };
         if !ptr.is_null() {
-            let msg = unsafe { &mut *(ptr as *mut MsgWrapper<T>) };
+            let msg = unsafe { msg_typecast::<T>(ptr) };
             Some(MsgOwner::new(msg))
         } else {
             None
@@ -96,7 +117,7 @@ impl<T: Sized + Send> RecvChannel<T> {
 }
 
 enum Mailbox {
-    Message(*mut ()),
+    Message(*mut MsgHeader),
     Subscription(u32),
     MessageWaiting
 }
@@ -121,7 +142,7 @@ impl<T: Sized + Send> Future for &RecvChannel<T> {
     type Output = MsgOwner<T>;
     fn poll(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
         if let Some(Mailbox::Message(ptr)) = IPC.data.take() {
-            let msg = unsafe { &mut *(ptr as *mut MsgWrapper<T>) };
+            let msg = unsafe { msg_typecast::<T>(ptr) };
             let owner = MsgOwner::new(msg);
             Poll::Ready(owner)
         } else { //TODO: try
@@ -244,14 +265,14 @@ pub fn call<F: Future + 'static>(ptr: *mut (), f: impl FnOnce() -> F) -> u32 {
         }
         syscall
     } else {
-        loop {}
+        panic!("no subscription");
     }
 }
 
 pub fn msg_input(msg: *mut ()) {
     if !msg.is_null() {
-        if let Some(_) = IPC.data.take() {   
-            IPC.data.set(Some(Mailbox::Message(msg)));
+        if IPC.data.take().is_some() {
+            IPC.data.set(Some(Mailbox::Message(msg as *mut MsgHeader)));
         }
     }
 }
@@ -265,7 +286,6 @@ pub fn call_once(f: impl FnOnce() -> *mut ()) -> *mut () {
         FUT_PTR.data.set(Some(ptr));
         INIT.data.set(Some(()));
     }
-
     FUT_PTR.data.get().unwrap()
 }
 
