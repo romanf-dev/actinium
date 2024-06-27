@@ -4,6 +4,8 @@ Actinium
 Actinium is a microcontroller framework implementing actor-based execution 
 model. It provides both hardware-assisted scheduling and memory protection 
 for fault isolation.
+Framework code is currently written in C but unprivileged tasks may be 
+written in either C or Rust.
 Please note it is still in pre-alpha stage and **isn't ready** for any use 
 except research and experiments. This readme is also incomplete and will 
 be updated over time...
@@ -17,9 +19,9 @@ Features
 - Hard real-time capability
 - Tasks are separately compiled and run in unprivileged mode
 - Region-based memory protection
-- Message passing communication
-- Timer services
-- No heap required
+- Zero-copy message passing communication
+- Timer facility
+- No heap required, no dynamic memory allocation in the kernel
 - Only ARM Cortex-M3/M4 (with MPU) are supported at now
 
 
@@ -119,11 +121,9 @@ condition is satisfied.
 
 | syscall  | synchronous | description |
 |----------|-------------|-------------|
-|delay     | |re-activates actor execution after the specified period |
-|subscribe to channel| |wait for new messages |
-|subscribe to message pool| |wait for messages to be available for allocation |
+|delay     |   |re-activates actor execution after the specified period |
+|subscribe |   |wait for new messages |
 |try_pop   | o |polls a channel synchronously |
-|alloc     | o |allocate new message |
 |send      | o |post the currently owned message into a channel |
 |free      | o |free the owned message |
 
@@ -133,14 +133,13 @@ Reliability
 
 The system is protected from the following bugs/attack vectors:
 
-- **use of wrong channels**: channels that are used by unprivileged actors 
+- **channel misuse**: channels that are used by unprivileged actors 
   are identified by ids, not pointers. Ids are validated before use, 
   therefore actors cannot post to/get messages from arbitrary channels, only
   allowed ones may be used. Also it is impossible to post message of wrong 
   type since both messages and channels have type ids.
 - **message leaks**: actor is allowed to own just a single message at any 
-  time. Post/get another message causes the owned message to be freed. Actor 
-  crash is also frees the message.
+  time. Post/get another message causes the owned message to be freed.
 - **memory unsafety**: invalid instructions or memory references beyond 
   allowed areas cause exceptions and restart of the actor.
 - **stack corruption**: insufficient stack space including the case of 
@@ -162,7 +161,7 @@ Currently, 5 regions are used for each unprivileged actor.
 - Code (flash)
 - Data (SRAM, also includes .bss)
 - Stack
-- Currently owned message (optional)
+- Currently owned message
 - ‘User’ region for peripheral access (optional)
 
 I plan to remove restrictions and allow to set the number of regions per 
@@ -270,6 +269,7 @@ Files
 |arch/armv7m/core*.h | CMSIS headers by ARM |
 |arch/armv7m/task_startup.s | low-level task initialization |
 |actinium.h | cross-platform framework functions |
+|rust_task | library for Rust tasks support |
 |task.ld | linker script for tasks |
 |ldgen.sh | linker script generator to place kernel and actors in memory |
 
