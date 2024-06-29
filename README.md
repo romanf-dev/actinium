@@ -76,9 +76,9 @@ performance reasons. This may cause data leaks between actors, but may be
 fixed if needed. Actors should not have access to DMA controller, otherwise 
 any protection may be compromised.
 
-When actor crashes while holding a message the message is freed as marked
+When actor crashes while holding a message the message is freed and marked
 as 'poisoned'. This mechanism allows to implement reliable request-reply
-protocol even when both client and server unreliable.
+protocol even when both client and server are unreliable.
 
 
 Files
@@ -97,9 +97,9 @@ Files
 The demo
 --------
 
-The demo contains two tasks: sender and controller. The sender sends
+The demo contains two tasks: sender and controller. The 'sender' sends
 requests to toggle LED to 'controller' who has access to the corresponding 
-peripheral. Both actors constantly crash after few activations but they're 
+peripheral. Both actors crash periodically after few activations but they're
 restarted by exceptions and the system continues to work.
 This demonstrates 'let it crash' principle: even when no task is reliable 
 the whole system works as designed.
@@ -112,9 +112,8 @@ PATH). This yields image.elf file containing all the tasks and the kernel
 ready for flashing.
 
 Original tasks (task0.c and task1.c) are simple and written in C. However,
-since actor's are inherently 'async' writing them in C requres some efforts
-because of no async/await functionality in the language. The framework is 
-designed for async actors so Rust is more suitable for writing them. 
+since actors are inherently 'async' writing them in C requres some efforts
+because of no async/await functionality in the language. 
 The Rust demo replaces 'controller' task (for the original 'sender'). 
 It interprets 'LED on' and 'LED off' messages as 'blink once' and 'blink 
 twice' so it is visually distinguishable from C demo. To build the Rust demo 
@@ -123,8 +122,8 @@ run:
         make rust_example
         make
 
-The first call creates app0.o from Rust crate rust_app0 in the demo folder.
-The second one builds executable image using the modified app0 from the
+The first call creates task0.o from Rust crate rust_app0 in the demo folder.
+The second one builds executable image using the modified task from the
 previous step.
 
 
