@@ -111,8 +111,7 @@ done
 echo -e "}\n" >> memory_regions.ld
 echo -e "\t} > KFLASH\n}\n" >> descriptors.ld
 
-echo "Linking..."
+echo "Generating ldscript..."
 cat input_list.ld memory_regions.ld sections.ld descriptors.ld > ldscript.ld
-arm-none-eabi-ld -n -o image.elf -T ldscript.ld
-rm input_list.ld memory_regions.ld sections.ld descriptors.ld *.pfx
+rm input_list.ld memory_regions.ld sections.ld descriptors.ld
 

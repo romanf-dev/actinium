@@ -15,6 +15,7 @@ task%.o : task%.c
 all : tasks kernel
 	rm main.o startup_stm32f401xc.o task0.o task1.o
 	../core/ldgen.sh 0x08000000 0x20000000
+	arm-none-eabi-ld -n -o image.elf -T ldscript.ld
 
 tasks : task0.o task1.o fwk
 	$(GCC_PREFIX)ld -nostdlib -r -n -T ../core/task.ld -o app0.o task0.o ../core/arch/armv7m/task_startup.o
@@ -27,7 +28,7 @@ fwk:
 	$(MAKE) --directory=../core/arch/armv7m
 
 clean:
-	rm -f *.o *.elf *.0 ldscript.ld
+	rm -f *.o *.elf *.0 *.pfx ldscript.ld
 	$(MAKE) --directory=../core/arch/armv7m clean
 	$(MAKE) --directory=rust_app0 clean
 
