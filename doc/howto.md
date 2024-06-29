@@ -1,17 +1,17 @@
 How to use
 ==========
 
-- Set include dirs and include actinium.h into your application.
-- Add global variables g_mg_context and g_ac_context to some file in your project.
+- Set include dirs and include actinium.h into the application.
+- Add global variables g_mg_context and g_ac_context to some file in the project.
 - Install ac_intr_entry as interrupt handler for vectors dedicated to actors.
 - Install ac_trap_entry and ac_svc_entry as handlers for exceptions and syscall.
 - Initialize interrupt controller registers and priorities.
-- Initialize context, channels and actors in your main().
+- Initialize context, channels and actors in main().
 - Put call to 'tick' in interrupt handler of the tick source.
-- Implement wrapers and validation function that maps ids to channel objects.
-- Call ac_kernel_start at end of your main().
+- Implement wrappers and validation function that maps ids to channel objects.
+- Call ac_kernel_start at end of main().
 
-After code is compiled into relocatables, rename kernel relocatable into kernel.0 
+After code is compiled into relocatables, rename kernel relocatable into kernel.0
 (numeric 0, not O).
 
 Run ldgen.sh script with two parameters as base addresses of flash and SRAM.
