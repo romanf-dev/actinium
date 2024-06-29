@@ -60,11 +60,6 @@ struct ac_channel_t* ac_channel_validate(
 }
 
 int main(void) {
-    static struct ac_actor_t g_handler;
-    static struct ac_actor_t g_sender;
-    static alignas(1024) uint8_t stack0[1024];
-    static alignas(sizeof(struct led_msg_t)) struct led_msg_t g_storage[3];
-
     /* 
      * Setup clocks and other hardware stuff...
      */
@@ -109,7 +104,7 @@ int main(void) {
     MPU->CTRL = MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_ENABLE_Msk;
     __DSB();
     __ISB();
-    
+
     /* 
      * Base address of flash and its size.
      */
@@ -118,11 +113,13 @@ int main(void) {
     /* 
      * Both actors share the same priority so there's only one stack for prio 1.
      */
-    ac_context_stack_set(1, sizeof(stack0), stack0);
+    static alignas(1024) uint8_t stack0[1024];
+    ac_context_stack_set(2, sizeof(stack0), stack0);
 
     /* 
      * Create global objects, 1 is used as unique type id, any value may be used.
      */
+    static alignas(sizeof(struct led_msg_t)) struct led_msg_t g_storage[3];
     ac_channel_init_ex(&g_chan[0], sizeof(g_storage), g_storage, sizeof(g_storage[0]), 1);
     ac_channel_init(&g_chan[1], 1);
 
@@ -135,22 +132,25 @@ int main(void) {
      * Enable two first vectors and set priotity 1, the maximum priority for 
      * unprivileged actors.
      */
-    NVIC_SetPriority(0, 1);
-    NVIC_SetPriority(1, 1);
+    NVIC_SetPriority(0, 2);
+    NVIC_SetPriority(1, 2);
     NVIC_EnableIRQ(0);
     NVIC_EnableIRQ(1);
+    NVIC_SetPriority(SysTick_IRQn, 1);
 
     /* 
      * Create the 'controller' actor and allow to access GPIOC.
      * The second argument is interrupt vector. Third argument is binary file
      * id. 
      */
+    static struct ac_actor_t g_handler;
     ac_actor_init(&g_handler, 0, 0);
     ac_actor_allow(&g_handler, 64, (void*)GPIOC_BASE, AC_ATTR_DEV);
 
     /* 
      * Create the 'sender' actor, who sends messages to the 'controller'.
      */
+    static struct ac_actor_t g_sender;
     ac_actor_init(&g_sender, 1, 1);
 
     /* 
