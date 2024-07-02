@@ -40,6 +40,11 @@ Extended API for channels specifies memory pool for initial message
 allocations. When a message is allocated from such channel the latter
 is set as the message parent. Freeing message always puts it into the
 parent channel despite any further owners of the message.
+Msg type is used for exact message type identification to avoid 
+message posting into a wrong channel. Because compile-time typeid is
+not available in C it is the user responsibility to set message
+types properly. Type must match in any channels which are used to 
+hold the same message type. The type itself is any nonzero integer.
 
         void ac_channel_init_ex(
             struct ac_channel_t* chan, 
@@ -66,7 +71,9 @@ first object file in the build folder in alphabetical order.
             unsigned int task_id
         );
 
-Allow actor to access a region. Only one region per actor is allowed.
+Allow actor to access a region. Only one region per actor is allowed at
+now. Attribute may be one of the following: AC_ATTR_RW, AC_ATTR_RO and
+AC_ATTR_DEV for memory-mapped devices.
 
         void ac_actor_allow(
             struct ac_actor_t* actor,
@@ -76,6 +83,14 @@ Allow actor to access a region. Only one region per actor is allowed.
         );
 
 The framework expects these functions to be implemented by the user:
+When any actor tries to post/subscribe this function is called to
+translate the channel id into object pointer.
+Actor structure may be augmented on the user side with any security-
+related members so they may be accessed inside this function using
+containing_record-like macro on 'caller'.
+Additionally, is_write parameter may be used for fine-grained channel
+access, for example, to restrict some actor only to read some channel.
+If access is not granted the function should return 0.
 
         extern struct ac_channel_t* ac_channel_validate(
             struct ac_actor_t* caller, 
@@ -100,11 +115,15 @@ are as follows:
         }
 
 
+Trap handler does not accept frame pointer as frame may be broken by the user
+and it is not safe to access the stack.
+
+
 Unprivileged API (Rust)
 -----------------------
 
 The library provides macro 'bind' which is intended to bind message
-passed as a parameter into main function with async function with 
+passed as a parameter into main function to async function with 
 the following signature:
 
         async fn actor() -> !
@@ -116,6 +135,9 @@ Default implementation of the main():
             bind!(msg, actor)
         }
 
+It may be implemented as procedural macro to hide wrappers but I dislike any
+'hidden logic' and macro-generated functions.
+
 
 ### Envelope
 
@@ -123,11 +145,19 @@ Opaque struct representing a message.
 
         struct Envelope<T>
 
+Please note that generic message type contains 16-byte header, so T type 
+must have such a size to make the whole message power-of-2-sized. 
+For example if your message payload is 4-bytes long you have to include 
+explicit 12-bytes padding in order to get 32-bytes message 
+(16 bytes header + 4 bytes payload + 12 bytes padding).
+This is the MPU hardware restriction and is required for all ARMv7-M chips.
+
 Traits: Deref, DerefMut, Drop
 
 Methods:
 
         fn is_poisoned(&self) -> bool
+
 
 ### Timer
 
@@ -140,6 +170,7 @@ Methods:
         const fn new() -> Self
         async fn delay(&self, delay: u32)
 
+
 ### RecvChannel
 
 Channel for receiving.
@@ -151,6 +182,7 @@ Methods:
         const fn new(id: u32) -> Self
         fn try_pop(&self) -> Option<Envelope<T>>
         async fn get(&self) -> Envelope<T>
+
 
 ### SendChannel
 
@@ -166,5 +198,4 @@ Methods:
 Please note that msg argument in 'send' is not really used. The actor always
 sends a message it currently owns. Envelope should be passed into send function
 to avoid call of the destructor that frees the owned message.
-
 

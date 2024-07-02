@@ -81,4 +81,7 @@ Actors who need to communicate with devices may be granted access to
 peripheral memory. Interrupts are not directly accessible and should 
 be redirected to channels as messages by the kernel part of application if 
 needed.
+To avoid situation when interrupt handler cannot allocate new message
+it is recommended to mask the corresponding interrupt line when the
+pool is empty.
 
