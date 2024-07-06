@@ -19,10 +19,10 @@ use core::cell::{Cell, UnsafeCell};
 use core::ops::{Deref, DerefMut};
  
 const SC_DELAY: u32 = 0x00000000;
-const SC_CHAN_GET: u32 = 0x10000000;
+const SC_CHAN_POP: u32 = 0x10000000;
 const SC_CHAN_POLL: u32 = 0x20000000;
-const SC_SEND_MSG: u32 = 0x30000000;
-const SC_FREE_MSG: u32 = 0x40000000;
+const SC_MSG_SEND: u32 = 0x30000000;
+const SC_MSG_FREE: u32 = 0x40000000;
 
 #[repr(C)]
 struct MsgHeader {
@@ -51,6 +51,14 @@ unsafe fn msg_typecast<'a, T: Send>(ptr: *mut MsgHeader) -> &'a mut Msg<T> {
     }
 }
 
+pub struct Token();
+
+impl Token {
+    fn new() -> Self {
+        Token()
+    }
+}
+
 pub struct Envelope<T: Sized + Send + 'static> {
     msg_ref: &'static mut Msg<T>
 }
@@ -64,6 +72,14 @@ impl<T: Sized + Send> Envelope<T> {
     
     pub fn is_poisoned(&self) -> bool {
         self.msg_ref.header.poisoned != 0
+    }
+    
+    pub fn free(self) -> Token {
+        mem::forget(self);
+        unsafe {
+            _ac_syscall(SC_MSG_FREE);
+        }
+        Token::new()
     }    
 }
 
@@ -82,9 +98,7 @@ impl<T: Send> DerefMut for Envelope<T> {
 
 impl<T: Send> Drop for Envelope<T> {
     fn drop(&mut self) {
-        unsafe {
-            _ac_syscall(SC_FREE_MSG);
-        }
+        panic!("dropped msg");
     }
 }
 
@@ -101,17 +115,17 @@ impl<T: Sized + Send> RecvChannel<T> {
         }
     }
     
-    pub fn try_pop(&self) -> Option<Envelope<T>> {
+    pub fn try_pop(&self, token: Token) -> Result<Envelope<T>, Token> {
         let ptr = unsafe { _ac_syscall(SC_CHAN_POLL | self.id) };
         if !ptr.is_null() {
             let msg = unsafe { msg_typecast::<T>(ptr) };
-            Some(Envelope::new(msg))
+            Ok(Envelope::new(msg))
         } else {
-            None
+            Err(token)
         }
     }
     
-    pub async fn get(&self) -> Envelope<T> {
+    pub async fn pop(&self, _token: Token) -> Envelope<T> {
         self.await
     }
 }
@@ -145,7 +159,7 @@ impl<T: Sized + Send> Future for &RecvChannel<T> {
             let msg = unsafe { msg_typecast::<T>(ptr) };
             Poll::Ready(Envelope::new(msg))
         } else {
-            IPC.data.set(Some(Mailbox::Subscription(self.id | SC_CHAN_GET)));
+            IPC.data.set(Some(Mailbox::Subscription(self.id | SC_CHAN_POP)));
             Poll::Pending
         }
     }
@@ -164,11 +178,12 @@ impl<T: Sized + Send> SendChannel<T> {
         }
     }
     
-    pub fn send(&mut self, _msg: Envelope<T>) {
-        mem::forget(_msg); /* Message is not owned after SEND, no need for drop. */
+    pub fn send(&mut self, msg: Envelope<T>) -> Token {
+        mem::forget(msg);
         unsafe {
-            _ac_syscall(self.id | SC_SEND_MSG);
+            _ac_syscall(self.id | SC_MSG_SEND);
         }
+        Token::new()
     }
 }
 
@@ -204,15 +219,15 @@ impl Future for &Timer {
     }
 }
 
-pub const fn size_of<F>(_future: &impl FnOnce() -> F) -> usize {
+pub const fn size_of<F>(_future: &impl FnOnce(Token) -> F) -> usize {
     mem::size_of::<F>()
 }
 
-pub const fn align_of<F>(_future: &impl FnOnce() -> F) -> usize {
+pub const fn align_of<F>(_future: &impl FnOnce(Token) -> F) -> usize {
     mem::align_of::<F>()
 }
 
-unsafe fn cast_to<F>(p: *const (), _: impl FnOnce() -> F) -> &'static mut F {
+unsafe fn cast_to<F>(p: *const (), _: impl FnOnce(Token) -> F) -> &'static mut F {
     &mut *(p as *mut F)
 }
 
@@ -243,7 +258,7 @@ impl<const N: usize, const A: usize> FutureStorage<N, A> {
     }
 }
 
-pub fn call<F: Future + 'static>(ptr: *mut (), f: impl FnOnce() -> F) -> u32 {
+pub fn call<F: Future + 'static>(ptr: *mut (), f: impl FnOnce(Token) -> F) -> u32 {
     const VTABLE: RawWakerVTable = RawWakerVTable::new(
         |_| { RawWaker::new(ptr::null(), &VTABLE) }, |_| {}, |_| {}, |_| {}
     );
@@ -276,12 +291,12 @@ pub fn msg_input(msg: *mut ()) {
     }
 }
 
-pub fn call_once(f: impl FnOnce() -> *mut ()) -> *mut () {
+pub fn call_once(f: impl FnOnce(Token) -> *mut ()) -> *mut () {
     static INIT: Global<()> = Global::new();
     static FUT_PTR: Global<*mut ()> = Global::new();
     
     if INIT.data.get().is_none() {
-        let ptr = f();
+        let ptr = f(Token::new());
         FUT_PTR.data.set(Some(ptr));
         INIT.data.set(Some(()));
     }
@@ -299,7 +314,7 @@ macro_rules! bind {
         static DATA: FutureStorage<{SZ + ALIGN}, {ALIGN}> = FutureStorage::new();
 
         msg_input($msg);
-        let ptr = call_once(|| { unsafe { DATA.write($task()) } });
+        let ptr = call_once(|token| { unsafe { DATA.write($task(token)) } });
         let syscall = call(ptr, $task);
         syscall
     }}

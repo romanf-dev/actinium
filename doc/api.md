@@ -126,7 +126,7 @@ The library provides macro 'bind' which is intended to bind message
 passed as a parameter into main function to async function with 
 the following signature:
 
-        async fn actor() -> !
+        async fn actor(token: Token) -> !
 
 Default implementation of the main():
 
@@ -137,6 +137,26 @@ Default implementation of the main():
 
 It may be implemented as procedural macro to hide wrappers but I dislike any
 'hidden logic' and macro-generated functions.
+
+An actor may own only a single message at any time. When actor allocates a new
+one then previous message is implicitly freed by the kernel. This may lead to
+undefined behavior in safe Rust when someone allocates a new message while
+holding previous one since two messages are unrelated from the Rust type 
+system's point of view. To address this issue the concept of tokens are used.
+
+A token itself is an empty struct which represents the 'right to allocate a 
+new message'. Initial token is passed as a parameter into the actor function 
+and should be passed into all function that may allocate a message like pop or
+try_pop. Also, token has private constructor so it cannot be created inside 
+the actor. Thus, actor is allowed to own a single message which it recevied 
+in exchange to its initial token.
+
+When an actor loses its message ownership via free of send, the kernel returns
+a new token so actor may allocate new message using it etc.
+
+In other words, any actor at any time own either single token or single message
+so the protocol is enforced at compile-time and runtime UB is impossible within
+safe code.
 
 
 ### Envelope
@@ -157,6 +177,7 @@ Traits: Deref, DerefMut, Drop
 Methods:
 
         fn is_poisoned(&self) -> bool
+        fn free(self) -> Token
 
 
 ### Timer
@@ -180,8 +201,8 @@ Channel for receiving.
 Methods:
 
         const fn new(id: u32) -> Self
-        fn try_pop(&self) -> Option<Envelope<T>>
-        async fn get(&self) -> Envelope<T>
+        fn try_pop(&self, Token) -> Result<Envelope<T>, Token>
+        async fn pop(&self, Token) -> Envelope<T>
 
 
 ### SendChannel
@@ -193,9 +214,5 @@ Channel for sending.
 Methods:
 
         const fn new(id: u32) -> Self
-        fn send(&mut self, msg: Envelope<T>)
-
-Please note that msg argument in 'send' is not really used. The actor always
-sends a message it currently owns. Envelope should be passed into send function
-to avoid call of the destructor that frees the owned message.
+        fn send(&mut self, msg: Envelope<T>) -> Token
 

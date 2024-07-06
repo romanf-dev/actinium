@@ -10,8 +10,7 @@
 
 use core::ptr::write_volatile;
 use core::panic::PanicInfo;
-use ac::task::RecvChannel;
-use ac::task::Timer;
+use ac::task::{Timer, RecvChannel, Token};
 use ac::bind;
 
 #[panic_handler]
@@ -25,13 +24,14 @@ struct Msg {
     _padding: [u32; 3]
 }
 
-async fn controller() -> ! {   
+async fn controller(token: Token) -> ! {   
     static CHAN: RecvChannel<Msg> = RecvChannel::new(1);
     static TIMER: Timer = Timer::new();
     let ptr = 0x40020818 as *mut u32;
+    let mut t = token;
     
     loop {
-        let msg = CHAN.get().await;
+        let msg = CHAN.pop(t).await;
         let n = msg.control + 1;
             
         for _ in 0..n {
@@ -40,6 +40,8 @@ async fn controller() -> ! {
             unsafe { write_volatile(&mut *ptr, 1 << 29); }
             TIMER.delay(100).await;
         }
+
+        t = msg.free();
     }
 }
 
