@@ -43,16 +43,23 @@ bss_zeroing:
 start_bss_init:
     cmp r1, r2
     bcc bss_zeroing
-    mov r0, #0
+
+    bl _ac_init_once      /* Weak func. May be used by libc. */
+    mov r0, #0            /* Zero message at the first call. */
 
 task_run:
     bl main
-    svc 0                 /* Task return value is the queue id. */
+    svc 0                 /* Task return value is the syscall arg. */
 
 .global _ac_syscall
 .section .text
 .type _ac_syscall, %function
 _ac_syscall:
     svc 0
+    bx lr
+
+.weak _ac_init_once
+.type _ac_init_once, %function
+_ac_init_once:
     bx lr
 
