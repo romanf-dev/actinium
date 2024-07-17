@@ -31,8 +31,13 @@ clean:
 	rm -f *.o *.elf *.0 *.pfx ldscript.ld
 	$(MAKE) --directory=../core/arch/armv7m clean
 	$(MAKE) --directory=rust_app0 clean
+	$(MAKE) --directory=cpp_app1 clean
 
 rust_example: fwk
 	$(MAKE) --directory=rust_app0
 	mv rust_app0/target/thumbv7m-none-eabi/release/actinium_example task0.o
+
+cpp_example: fwk
+	$(MAKE) --directory=cpp_app1
+	mv cpp_app1/example.o task1.o
 
