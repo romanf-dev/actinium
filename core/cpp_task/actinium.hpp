@@ -47,20 +47,15 @@ template<typename T> struct message : message_header {
 template<typename T> concept transferable = 
     (sizeof(message<T>) & (sizeof(message<T>) - 1)) == 0;
 
-
 template<transferable T> class recv_channel;
 template<transferable T> class send_channel;
 
 /*
  * Message pointer are wrapped into 'owning' type. It may be moved but only
  * the framework code may instantiate it from a raw pointer.
- * The pointer is marked as volatile to avoid any optimizations that may cause 
- * implicit pointer dereference. Actor is allowed to own exactly one message 
- * in any time, so using obsolete owner (when new one is allocated or 
- * received) will cause exception and caller crash.
  */
 template<transferable T> class message_owner {
-    message<T>* volatile ptr_;
+    message<T>* ptr_;
     inline message_owner(message<T>* msg) noexcept : ptr_(msg) {}
     inline void drop() { ptr_ = nullptr; }
 
