@@ -1,3 +1,11 @@
+/**
+ ******************************************************************************
+ * @file      prelink.ld
+ * @brief     pre-link script for C++ tasks.
+ *
+ * It discards .group/exception-related sections and also merges remaining 
+ * sections into .text/.data/.bss as required by the relocation script.
+ *****************************************************************************/
 
 ENTRY(main)
 
