@@ -140,13 +140,13 @@ It may be implemented as procedural macro to hide wrappers but I dislike any
 
 An actor may own only a single message at any time. When actor allocates a new
 one then previous message is implicitly freed by the kernel. This may lead to
-undefined behavior in safe Rust when someone allocates a new message while
+invalid memory refs in safe Rust when someone allocates a new message while
 holding previous one since two messages are unrelated from the Rust type 
-system's point of view. To address this issue the concept of tokens are used.
+system's point of view. To address this issue the concept of tokens is used.
 
 A token itself is an empty struct which represents the 'right to allocate a 
 new message'. Initial token is passed as a parameter into the actor function 
-and should be passed into all function that may allocate a message like pop or
+and should be passed into all functions that may allocate a message like pop or
 try_pop. Also, token has private constructor so it cannot be created inside 
 the actor. Thus, actor is allowed to own a single message which it recevied 
 in exchange to its initial token.
@@ -154,9 +154,9 @@ in exchange to its initial token.
 When an actor loses its message ownership via free of send, the kernel returns
 a new token so actor may allocate new message using it etc.
 
-In other words, any actor at any time own either single token or single message
-so the protocol is enforced at compile-time and runtime UB is impossible within
-safe code.
+In other words, any actor at any time owns either single token or single message
+so the protocol is enforced at compile-time and runtime exceptions because of 
+obsolete messages are impossible.
 
 
 ### Envelope
