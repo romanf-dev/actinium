@@ -1,11 +1,11 @@
-Actinium
-========
 
-Actinium is a microcontroller framework (or kernel) implementing actor-based 
-execution model. It provides both hardware-assisted scheduling and memory 
-protection for fault isolation.
-Framework code is currently written in C but unprivileged tasks may be 
-written in either C or Rust.
+Actinium is an experimental real-time kernel for separately compiled
+coroutines. It provides both hardware-assisted scheduling and memory 
+protection for fault isolation. Also, it is small and simple:
+all the functionality including scripts and support for three languages
+is less than 1500 lines.
+Kernel code is currently written in C but unprivileged tasks may be 
+written in either C, C++ or Rust.  
 Please note it is still in pre-alpha stage and **isn't ready** for any use 
 except research and experiments.
 
@@ -30,25 +30,28 @@ Design principles
     Most of MCU-based embedded systems are reactive so full-fledged threads
     are often too heavyweight because of the requirement to allocate a stack
     for each thread. Actors use one stack per **priority level** as they are
-    run-to-completion routines.
-2.  **Hardware-assisted scheduling.**
-    Modern interrupt controllers implement priority-based actor model in 
+    run-to-completion routines. Modern languages allow to implement actors
+    that look and behave as threads but need less resources. Finally, actors
+    simplify real-time analysis.
+3.  **Hardware-assisted scheduling.**
+    Modern interrupt controllers implement prioritized actor model in 
     hardware. Actor's priorities are mapped to interrupt priorities, thus
     scheduling and preemption operations are effectively implemented by
     the interrupt controller. It boosts performance and reduces code size.
-3.  **Memory protection.**
+4.  **Memory protection.**
     Actinium is designed for embedded systems with reliability requirements.
     Each actor is compiled as separate binary executable and isolated within 
     memory regions using MPU (memory protection unit). Actor's crash may not
     cause the whole system to fail.
-4.  **Zero-copy message-passing communication.**
+5.  **Zero-copy message-passing communication.**
     Actors communicate using messages and channels. However, messages are
     always passed by reference, so sending 1Kb and 1Gb message takes exactly
     the same time. Message passing is the only communication method at now.
-5.  **Fault-tolerance and 'let it crash' principle.**
+6.  **Fault-tolerance and 'let it crash' principle.**
     When the framework encounters crash condition, e.g. invalid memory 
     reference, wrong syscall number, exception, etc. the erronous actor 
-    is automatically marked for restart.
+    is automatically marked for restart. Clients and servers may not
+    trust each other, IPC protocol ensures possibility for system recovery.
 
 
 Reliability
@@ -90,6 +93,7 @@ Files
 |arch/armv7m | hardware abstraction layer interface for ARMv7-M |
 |actinium.h | cross-platform framework functions |
 |rust_task | library for Rust tasks support |
+|cpp_task | library for C++ tasks support |
 |task.ld | linker script for tasks |
 |ldgen.sh | linker script generator to place kernel and actors in memory |
 
@@ -114,17 +118,24 @@ ready for flashing.
 Original tasks (task0.c and task1.c) are simple and written in C. However,
 since actors are inherently 'async' writing them in C requres some efforts
 because of no async/await functionality in the language. 
-The Rust demo replaces 'controller' task (for the original 'sender'). 
-It interprets 'LED on' and 'LED off' messages as 'blink once' and 'blink 
-twice' so it is visually distinguishable from C demo. To build the Rust demo 
-run:
+
+There are two demo modifications: 'sender' in C++20 and 'controller' in Rust.
+
+Modified controller interprets 'LED on' and 'LED off' messages as 'blink once' 
+and 'blink  twice' so it is visually distinguishable from C demo. 
+To build the demo modification run:
 
         make rust_example
+
+and/or: 
+
+        make cpp_example
+
+Then run:
+
         make
 
-The first call creates task0.o from Rust crate rust_app0 in the demo folder.
-The second one builds executable image using the modified task from the
-previous step.
+To build the executable image with modified tasks.
 
 
 Why Actinium?
