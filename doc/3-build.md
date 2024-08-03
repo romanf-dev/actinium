@@ -21,20 +21,20 @@ Also it provides section sizes in a special symbol so kernel may
 further use this info when spawning tasks.
 
 
-                       +-----------+         text/data/bss sizes    +------------------+
-                       |  task.ld  |             +----------------->|      ldgen.sh    |
-                       +-----------+             |            ^     +------------------+
-            section grouping |                   |            |            |
-         +--------+          V      +----------------------+  |            |  section alignment
-         | task.c |---------------> | relocatable  task.o  |--+--+         V  & relocation
-         +--------+                 +----------------------+  |  |  +------------------+
-                                                              |  |  | generated script |
-                       +-----------+                   +------+  |  +------------------+        
-                       | kernel.ld |                   |         |         |  final linking
-                       +-----------+                   |         |         V
-            section grouping |                         |         |  +------------------+
-         +--------+          V      +----------------------+     V  |    executable    |
-         | main.c |---------------> | relocatable kernel.0 |------->|       image      |
-         +--------+                 +----------------------+        +------------------+
+               +-----------+    text/data/bss sizes   +------------------+
+               |  task.ld  |        +---------------->|      ldgen.sh    |
+               +-----------+        |            ^    +------------------+
+                     |              |            |           |
+         +--------+  V  +----------------------+ |           |  section align
+         | task.c |---->| relocatable  task.o  |-+-+         V  & relocation
+         +--------+     +----------------------+ | |  +------------------+
+                                                 | |  | generated script |
+               +-----------+              +------+ |  +------------------+        
+               | kernel.ld |              |        |         |  final linking
+               +-----------+              |        |         V
+                     |                    |        |  +------------------+
+         +--------+  V  +----------------------+   V  |    executable    |
+         | main.c |---->| relocatable kernel.0 |----->|       image      |
+         +--------+     +----------------------+      +------------------+
 
 

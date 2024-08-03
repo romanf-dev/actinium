@@ -1,13 +1,11 @@
 
 Actinium is an experimental real-time kernel for separately compiled
 coroutines. It provides both hardware-assisted scheduling and memory 
-protection for fault isolation. Also, it is small and simple:
-all the functionality including scripts and support for three languages
-is less than 1500 lines.
+protection for fault isolation. Also, it is small and simple.
 Kernel code is currently written in C but unprivileged tasks may be 
-written in either C, C++ or Rust.  
-Please note it is still in pre-alpha stage and **isn't ready** for any use 
-except research and experiments.
+written in either C, C++ or Rust.
+Please note it is under development and should not be used in 
+security/safety-critical projects.
 
 
 Features
@@ -103,7 +101,7 @@ The demo
 
 The demo contains two tasks: sender and controller. The 'sender' sends
 requests to toggle LED to 'controller' who has access to the corresponding 
-peripheral. Both actors crash periodically after few activations but they're
+peripheral. Both tasks crash periodically after few activations but they're
 restarted by exceptions and the system continues to work.
 This demonstrates 'let it crash' principle: even when no task is reliable 
 the whole system works as designed.

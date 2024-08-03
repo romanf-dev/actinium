@@ -31,6 +31,10 @@ restrictions: memory must be power-2-sized and aligned to its size.
             void* ptr
         );
 
+If the system has a tick source then tick handler should be called.
+
+        void ac_context_tick(void);
+
 Start scheduling loop.
 
         void noreturn ac_kernel_start(void);
@@ -41,10 +45,9 @@ allocations. When a message is allocated from such channel the latter
 is set as the message parent. Freeing message always puts it into the
 parent channel despite any further owners of the message.
 Msg type is used for exact message type identification to avoid 
-message posting into a wrong channel. Because compile-time typeid is
-not available in C it is the user responsibility to set message
-types properly. Type must match in any channels which are used to 
-hold the same message type. The type itself is any nonzero integer.
+message posting into a wrong channel. Types must match in any channels 
+which are used to hold the same message type. The type itself is any 
+nonzero integer.
 
         void ac_channel_init_ex(
             struct ac_channel_t* chan, 
@@ -82,6 +85,11 @@ AC_ATTR_DEV for memory-mapped devices.
             unsigned int attr
         );
 
+Hard restart for the specified actor:
+
+        void ac_actor_restart(struct ac_actor_t* actor);
+
+
 The framework expects these functions to be implemented by the user:
 When any actor tries to post/subscribe this function is called to
 translate the channel id into object pointer.
@@ -97,6 +105,14 @@ If access is not granted the function should return 0.
             unsigned int handle,
             bool is_write
         );
+
+When error condition is detected (like exception) then the user-provided
+function is called during error processing. It may be used to customize 
+error handling behavior. For example, faulty actor may be just restarted,
+or it may have internal counter to be restarted only N times, or some 
+message may be sent into a channel to notify another actor, etc.
+
+        extern void ac_actor_error(struct ac_actor_t* src);
 
 These functions are wrappers for internal functions. They may be used for
 some extra logic or for debugging/logging etc. Default implementations
@@ -161,7 +177,7 @@ obsolete messages are impossible.
 
 ### Envelope
 
-Opaque struct representing a message.
+Message ownership is represented as Envelope which hides underlying raw pointer.
 
         struct Envelope<T>
 
@@ -172,6 +188,10 @@ explicit 12-bytes padding in order to get 32-bytes message
 (16 bytes header + 4 bytes payload + 12 bytes padding).
 This is the MPU hardware restriction and is required for all ARMv7-M chips.
 
+Messages should never be dropped implicitly. Dropping of a message causes
+loss of the token so an actor cannot proceed. If a message is not needed 
+anymore use free.
+
 Traits: Deref, DerefMut, Drop
 
 Methods:
@@ -180,16 +200,11 @@ Methods:
         fn free(self) -> Token
 
 
-### Timer
+### Delay
 
 Represents a delay.
 
-        struct Timer
-
-Methods:
-
-        const fn new() -> Self
-        async fn delay(&self, delay: u32)
+        async fn delay(ticks: u32)
 
 
 ### RecvChannel
