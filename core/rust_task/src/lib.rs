@@ -18,11 +18,11 @@ use core::task::{Poll, Context, RawWakerVTable, RawWaker, Waker};
 use core::cell::{Cell, UnsafeCell};
 use core::ops::{Deref, DerefMut};
  
-const SC_DELAY: u32 = 0x00000000;
-const SC_CHAN_POP: u32 = 0x10000000;
-const SC_CHAN_POLL: u32 = 0x20000000;
-const SC_MSG_SEND: u32 = 0x30000000;
-const SC_MSG_FREE: u32 = 0x40000000;
+const SC_DELAY: u32 = 0 << 28;
+const SC_CHAN_POP: u32 = 1 << 28;
+const SC_CHAN_POLL: u32 = 2 << 28;
+const SC_MSG_SEND: u32 = 3 << 28;
+const SC_MSG_FREE: u32 = 4 << 28;
 
 #[repr(C)]
 struct MsgHeader {
@@ -188,30 +188,19 @@ impl<T: Sized + Send> SendChannel<T> {
 }
 
 pub struct Timer {
-    delay: Cell<u32>
+    delay: u32
 }
 
-unsafe impl Sync for Timer {}
-
-impl Timer {
-    pub const fn new() -> Self {
-        Self {
-            delay: Cell::new(0)
-        }
-    }
-    
-    pub fn delay(&self, delay: u32) -> &Self {
-        self.delay.set(delay);
-        self
-    }
+pub fn delay(ticks: u32) -> Timer {
+    Timer { delay: ticks }
 }
 
-impl Future for &Timer {
+impl Future for Timer {
     type Output = ();
-    fn poll(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
-        let delay = self.delay.take();
-        if delay > 0 {
-            IPC.data.set(Some(Mailbox::Subscription(delay | SC_DELAY)));
+    fn poll(mut self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
+        if self.delay > 0 {
+            IPC.data.set(Some(Mailbox::Subscription(self.delay | SC_DELAY)));
+            self.delay = 0;
             Poll::Pending
         } else {
             Poll::Ready(())
