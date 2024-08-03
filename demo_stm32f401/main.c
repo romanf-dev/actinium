@@ -21,7 +21,7 @@ void HardFault_Handler(void) {
 }
 
 void SysTick_Handler(void) {
-    mg_context_tick();
+    ac_context_tick();
 }
 
 void __assert_func(
@@ -57,6 +57,10 @@ struct ac_channel_t* ac_channel_validate(
 ) {
     const size_t max_id = sizeof(g_chan) / sizeof(g_chan[0]);
     return (handle < max_id) ? &g_chan[handle] : 0;
+}
+
+void ac_actor_error(struct ac_actor_t* actor) {
+    ac_actor_restart(actor);
 }
 
 int main(void) {
@@ -111,7 +115,7 @@ int main(void) {
     ac_context_init(0x08000000, 0x40000);
 
     /* 
-     * Both actors share the same priority so there's only one stack for prio 1.
+     * Both actors share the same priority 2 so there's only one stack.
      */
     static alignas(1024) uint8_t stack0[1024];
     ac_context_stack_set(2, sizeof(stack0), stack0);
@@ -129,8 +133,8 @@ int main(void) {
     NVIC_SetPriorityGrouping(3);
 
     /* 
-     * Enable two first vectors and set priotity 1, the maximum priority for 
-     * unprivileged actors.
+     * Enable two first vectors and set priotity 2.
+     * Priority 1 is used for the tick and 0 is reserved for traps.
      */
     NVIC_SetPriority(0, 2);
     NVIC_SetPriority(1, 2);

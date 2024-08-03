@@ -97,6 +97,7 @@ extern void noreturn ac_kernel_start(void);
 extern void* ac_intr_handler(uint32_t vect, void* frame);
 extern void* ac_svc_handler(uint32_t arg, void* frame);
 extern void* ac_trap_handler(uint32_t exception_id);
+extern void ac_actor_error(struct ac_actor_t* src);
 extern struct ac_channel_t* ac_channel_validate(
     struct ac_actor_t* caller, 
     unsigned int handle,
@@ -117,6 +118,10 @@ static inline void ac_context_init(uintptr_t ro_base, size_t ro_size) {
     hal_region_init(&regions[AC_REGION_STACK], stack, HAL_CONTEXT_SZ, AC_ATTR_RW);
     hal_mpu_reprogram(AC_REGIONS_NUM, regions);
     hal_intr_level(AC_RSVD_PRIO_NUM); /* Max level for unprivileged actors. */
+}
+
+static inline void ac_context_tick(void) {
+    mg_context_tick();
 }
 
 static inline void ac_context_stack_set(unsigned prio, size_t sz, void* ptr) {
@@ -340,13 +345,17 @@ static inline struct hal_frame_t* _ac_frame_restore_prev(void) {
     return prev_frame;
 }
 
+static inline void ac_actor_restart(struct ac_actor_t* actor) {
+    actor->restart_req = true;
+    _mg_actor_activate(&actor->base);
+}
+
 static inline struct hal_frame_t* ac_actor_exception(void) {
     struct ac_context_t* const context = AC_GET_CONTEXT();
     struct ac_actor_t* const me = context->running_actor;
     assert(me != 0);
-    me->restart_req = true;
     _ac_message_release(me, true);
-    _mg_actor_activate(&me->base);
+    ac_actor_error(me);
 
     return _ac_frame_restore_prev();
 }
