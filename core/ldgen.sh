@@ -18,17 +18,15 @@ round_to_power2() {
         done
         f=$((1 << counter))
     else
-        f=$tmp      
+        f=$tmp
     fi
     if [ $f -ne 0 ]; then    
         if [ $f -lt 32 ]; then
             echo 32
-        else
-            echo $f
+            return
         fi
-    else
-        echo $f
     fi
+    echo $f
 }
 
 alignas() {
@@ -62,6 +60,7 @@ for f in *.o; do
 done
 ((header_size = 16 * apps_num + 4))
 echo "Processing of $apps_num tasks, header size = $header_size bytes."
+((ktext_sz += header_size))
 
 flash_base=$1
 sram_base=$2
@@ -72,14 +71,14 @@ echo "Linker script generation..."
 
 echo "INPUT(kernel.0)" > input_list.ld
 echo -e "MEMORY\n{\n" > memory_regions.ld
-echo -e "\tKFLASH (rx) : ORIGIN = 0x$(to_hex $flash_base), LENGTH = 64K" >> memory_regions.ld
-echo -e "\tKRAM (xrx) : ORIGIN = 0x$(to_hex $sram_base), LENGTH = 64K" >> memory_regions.ld
+echo -e "\tKFLASH (rx) : ORIGIN = 0x$(to_hex $flash_base), LENGTH = $ktext_sz" >> memory_regions.ld
+echo -e "\tKRAM (xrx) : ORIGIN = 0x$(to_hex $sram_base), LENGTH = $ksram_sz" >> memory_regions.ld
 echo -e "\t.descr (READONLY) : {\n\t_ac_task_mem_map = ABSOLUTE(.);\n\tLONG($apps_num);\n" > descriptors.ld
 echo -e "ENTRY(Reset_Handler)\nSECTIONS\n{\n" > sections.ld
 echo -e "\t.text : {\n\t\tkernel.0(.text*)\n\t} > KFLASH\n" >> sections.ld
 echo -e "\t.data : {\n\t\tkernel.0(.data*)\n\t} > KRAM AT> KFLASH\n" >> sections.ld
 echo -e "\t.bss : {\n\t\tkernel.0(.bss*)\n\t\tkernel.0(COMMON)\n\t} > KRAM\n" >> sections.ld
-((flash_base += ktext_sz + header_size))
+((flash_base += ktext_sz))
 ((sram_base += ksram_sz))
 
 counter=0
