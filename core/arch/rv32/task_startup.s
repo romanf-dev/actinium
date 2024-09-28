@@ -8,7 +8,7 @@
 
 startup:
     mv      t0, ra
-    bne     t0, zero, task_run
+    beq     t0, zero, task_run
     la      t0, _sbss
     la      t1, _ebss
 bss_loop:

@@ -91,32 +91,46 @@ enum {
 };
 
 struct hal_region_t {
-    uint32_t addr;
+    uint32_t pmpaddr;
 };
 
+extern void hal_pmp_update_entry3(uint32_t);
+extern void hal_pmp_reprogram(const struct hal_region_t*);
+
+/*
+ * Region holds precalculated content of the corresponding pmpaddrX register.
+ * Zero value is a special case meaning 'region disabled'.
+ */
 static inline void hal_region_init(
     struct hal_region_t* region, 
     uintptr_t addr, 
     size_t size,
     unsigned int attr
 ) {
-    /* TODO */
+    region->pmpaddr = size ? (addr >> 2) | ((size >> 3) - 1) : 0;
 }
 
-extern void hal_pmp_update_entry3(uint32_t);
-
+/*
+ * TODO: In the current design region update may only be called for 
+ * message region with fixed index 3.
+ */
 static inline void hal_mpu_update_region(
     unsigned int i, 
     const struct hal_region_t* region
 ) {
-    /* TODO */
+    assert(i == 3);
+    hal_pmp_update_entry3(region->pmpaddr);
 }
 
+/*
+ * TODO: Low-level asm part assumes that regions array contains 5 items.
+ */
 static inline void hal_mpu_reprogram(
     size_t sz, 
     const struct hal_region_t* regions
 ) {
-    /* TODO */
+    assert(sz == 5);
+    hal_pmp_reprogram(regions);
 }
 
 #endif

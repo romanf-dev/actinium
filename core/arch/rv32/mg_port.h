@@ -39,9 +39,8 @@ static inline unsigned int mg_port_clz(uint32_t v) {
 
 /* interrupt request is platform-specific, use external functions */
 extern void mg_interrupt_request(unsigned int vect);
-extern unsigned int mg_interrupt_prio(unsigned int vect);
 
-#define pic_vect2prio(v) mg_interrupt_prio(v)
+#define pic_vect2prio(v) (v)
 #define pic_interrupt_request(v) mg_interrupt_request(v)
 
 #endif

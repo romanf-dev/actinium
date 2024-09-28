@@ -20,14 +20,6 @@ extern void ac_mtimer_handler(void);
 
 static struct pic_t g_pic;
 
-/*
- * Actor's virtual 'vectors' have linear priority: greater vector results in
- * greater preemption priority.
- */
-unsigned mg_interrupt_prio(unsigned vect) {
-    return vect;
-}
-
 void mg_interrupt_request(unsigned vect) {
     assert(vect != 0);
     mg_critical_section_enter();
@@ -57,6 +49,7 @@ struct hal_frame_t* hal_trap_handler(uint32_t mcause) {
     mg_critical_section_leave();
     struct hal_frame_t* const frame = ac_trap_handler(mcause);
     mg_critical_section_enter();
+    _pic_done(&g_pic);
 
     return frame;
 }
