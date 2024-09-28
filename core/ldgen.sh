@@ -5,7 +5,7 @@ to_hex() {
 }
 
 section_sz() {
-    local sz=$(arm-none-eabi-size -A $1 | sed -n -E "s/^\\$2\s+(\w+).*/\1/p");
+    local sz=$($1"size" -A $2 | sed -n -E "s/^\\$3\s+(\w+).*/\1/p");
     echo $sz 
 }
 
@@ -40,10 +40,11 @@ alignas() {
     echo $tmp
 }
 
+prefix=$3
 echo "Getting kernel sections info..."
-ktext_sz=$(section_sz kernel.0 .text);
-kdata_sz=$(section_sz kernel.0 .data);
-ksram_sz=$(section_sz kernel.0 .bss);
+ktext_sz=$(section_sz $prefix kernel.0 .text);
+kdata_sz=$(section_sz $prefix kernel.0 .data);
+ksram_sz=$(section_sz $prefix kernel.0 .bss);
 
 ((kdata_sz += 0))
 ((ktext_sz += kdata_sz))
@@ -55,7 +56,7 @@ apps_num=0
 header_size=0
 for f in *.o; do
     echo "Processing of $f object file as slot $apps_num..."
-    arm-none-eabi-objcopy --prefix-symbols task$apps_num $f $f.pfx
+    $prefix"objcopy" --prefix-symbols task$apps_num $f $f.pfx
     ((apps_num++))
 done
 ((header_size = 16 * apps_num + 4))
@@ -83,9 +84,9 @@ echo -e "\t.bss : {\n\t\tkernel.0(.bss*)\n\t\tkernel.0(COMMON)\n\t} > KRAM\n" >>
 
 counter=0
 for f in *.o; do
-    text_raw_sz=$(section_sz $f .text);
-    data_raw_sz=$(section_sz $f .data);
-    sram_raw_sz=$(section_sz $f .bss);
+    text_raw_sz=$(section_sz $prefix $f .text);
+    data_raw_sz=$(section_sz $prefix $f .data);
+    sram_raw_sz=$(section_sz $prefix $f .bss);
     ((text_raw_sz += data_raw_sz));
     ((sram_raw_sz += data_raw_sz));
     flash_size=$(round_to_power2 $text_raw_sz);

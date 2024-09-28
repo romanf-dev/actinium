@@ -14,12 +14,12 @@ task%.o : task%.c
 
 all : tasks kernel
 	rm main.o startup_stm32f401xc.o task0.o task1.o
-	../core/ldgen.sh 0x08000000 0x20000000
+	../core/ldgen.sh 0x08000000 0x20000000 arm-none-eabi-
 	arm-none-eabi-ld -n -o image.elf -T ldscript.ld
 
 tasks : task0.o task1.o fwk
-	$(GCC_PREFIX)ld -nostdlib -r -n -T ../core/task.ld -o app0.o task0.o ../core/arch/armv7m/task_startup.o
-	$(GCC_PREFIX)ld -nostdlib -r -n -T ../core/task.ld -o app1.o task1.o ../core/arch/armv7m/task_startup.o
+	$(GCC_PREFIX)ld -nostdlib -r -n -T ../core/arch/armv7m/task.ld -o app0.o task0.o ../core/arch/armv7m/task_startup.o
+	$(GCC_PREFIX)ld -nostdlib -r -n -T ../core/arch/armv7m/task.ld -o app1.o task1.o ../core/arch/armv7m/task_startup.o
 
 kernel : main.o startup_stm32f401xc.o fwk   
 	$(GCC_PREFIX)ld -nostdlib -r -n -T LinkerScript.ld -o kernel.0 main.o startup_stm32f401xc.o ../core/arch/armv7m/actinium.o
