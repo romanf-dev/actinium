@@ -18,7 +18,7 @@ Features
 - Zero-copy message passing communication
 - Timer facility
 - No heap required, no dynamic memory allocation in the kernel
-- Only ARM Cortex-M3/M4 (with MPU) are supported at now
+- ARM Cortex-M3/M4 (with MPU) and RISC-V (with PMP) are supported
 
 
 Design principles
@@ -88,16 +88,16 @@ Files
 
 | file at /core  | description |
 |----------------|-------------|
-|arch/armv7m | hardware abstraction layer interface for ARMv7-M |
+|arch/armv7m | hardware abstraction layer for ARMv7-M |
+|arch/rv32 | hardware abstraction layer for RISC-V |
 |actinium.h | cross-platform framework functions |
 |rust_task | library for Rust tasks support |
 |cpp_task | library for C++ tasks support |
-|task.ld | linker script for tasks |
 |ldgen.sh | linker script generator to place kernel and actors in memory |
 
 
-The demo
---------
+The demo (for STM32)
+--------------------
 
 The demo contains two tasks: sender and controller. The 'sender' sends
 requests to toggle LED to 'controller' who has access to the corresponding 
