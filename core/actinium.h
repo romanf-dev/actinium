@@ -217,13 +217,13 @@ static inline void ac_actor_init(
     const size_t task_num = config[0];
     struct hal_region_t* regions = actor->granted;
     const struct {
-        uint32_t flash_addr;
-        uint32_t flash_size;
-        uint32_t sram_addr; 
-        uint32_t sram_size;
+        uintptr_t flash_addr;
+        uintptr_t flash_size;
+        uintptr_t sram_addr; 
+        uintptr_t sram_size;
     } * const slot = (void*) (config + 1);
 
-    _Static_assert(sizeof(*slot) == sizeof(uint32_t) * 4, "padding");
+    _Static_assert(sizeof(*slot) == sizeof(uintptr_t) * 4, "padding");
     assert(task_id < task_num);
 
     mg_actor_init(&actor->base, 0, vect, 0); /* Null func means usermode. */
