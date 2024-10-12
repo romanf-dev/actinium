@@ -43,6 +43,10 @@ static inline void hal_intr_level(unsigned int level) {
     /*TODO*/
 }
 
+static inline void hal_init(void) {
+    /*TODO*/
+}
+
 enum {
     AC_ATTR_RO = 0,
     AC_ATTR_RW = 1,

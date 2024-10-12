@@ -35,7 +35,6 @@ enum {
     AC_REGION_MSG,
     AC_REGION_USER,
     AC_REGIONS_NUM,
-    AC_RSVD_PRIO_NUM = 1 /* Priority 0 is reserved for exceptions. */
 };
 
 /*
@@ -74,12 +73,12 @@ struct ac_context_t {
     struct {
         struct hal_frame_t* frame;
         struct ac_actor_t* actor;
-    } preempted[MG_PRIO_MAX - AC_RSVD_PRIO_NUM];
+    } preempted[MG_PRIO_MAX];
 
     struct {
         uintptr_t addr;
         size_t size;
-    } stacks[MG_PRIO_MAX - AC_RSVD_PRIO_NUM];
+    } stacks[MG_PRIO_MAX];
 };
 
 struct ac_channel_t {
@@ -114,10 +113,10 @@ static inline void ac_context_init(uintptr_t ro_base, size_t ro_size) {
     const uintptr_t stack = (uintptr_t)&_estack - HAL_CONTEXT_SZ;
 
     mg_context_init();
+    hal_init();
     hal_region_init(&regions[AC_REGION_FLASH], ro_base, ro_size, AC_ATTR_RO);
     hal_region_init(&regions[AC_REGION_STACK], stack, HAL_CONTEXT_SZ, AC_ATTR_RW);
     hal_mpu_reprogram(AC_REGIONS_NUM, regions);
-    hal_intr_level(AC_RSVD_PRIO_NUM); /* Max level for unprivileged actors. */
 }
 
 static inline void ac_context_tick(void) {
@@ -126,13 +125,11 @@ static inline void ac_context_tick(void) {
 
 static inline void ac_context_stack_set(unsigned prio, size_t sz, void* ptr) {
     struct ac_context_t* const context = AC_GET_CONTEXT();
-    const unsigned int level = prio - AC_RSVD_PRIO_NUM;
 
     assert((sz & (sz - 1)) == 0);
-    assert(prio >= AC_RSVD_PRIO_NUM);
     assert(sz > HAL_CONTEXT_SZ);
-    context->stacks[level].addr = (uintptr_t) ptr;
-    context->stacks[level].size = sz;
+    context->stacks[prio].addr = (uintptr_t) ptr;
+    context->stacks[prio].size = sz;
 }
 
 static inline void ac_channel_init_ex(
@@ -227,14 +224,12 @@ static inline void ac_actor_init(
     assert(task_id < task_num);
 
     mg_actor_init(&actor->base, 0, vect, 0); /* Null func means usermode. */
-    assert(actor->base.prio >= AC_RSVD_PRIO_NUM);
     actor->func = slot[task_id].flash_addr;
     actor->restart_req = true;
     actor->msg.parent = 0;
     actor->msg.size = 0;
     actor->msg.type = 0;
 
-    const unsigned int level = actor->base.prio - AC_RSVD_PRIO_NUM;
     struct ac_context_t* const context = AC_GET_CONTEXT();
 
     hal_region_init(
@@ -251,8 +246,8 @@ static inline void ac_actor_init(
     );
     hal_region_init(
         &regions[AC_REGION_STACK], 
-        context->stacks[level].addr, 
-        context->stacks[level].size, 
+        context->stacks[actor->base.prio].addr, 
+        context->stacks[actor->base.prio].size, 
         AC_ATTR_RW
     );
     hal_region_init(&regions[AC_REGION_MSG], 0, 0, AC_ATTR_RW);
@@ -271,7 +266,7 @@ static inline void ac_actor_allow(
 
 static inline struct hal_frame_t* _ac_frame_create(struct ac_actor_t* actor) {
     const struct ac_context_t* const context = AC_GET_CONTEXT();
-    const unsigned int prio = actor->base.prio - AC_RSVD_PRIO_NUM;
+    const unsigned int prio = actor->base.prio;
     const uintptr_t base = context->stacks[prio].addr;
     const size_t size = context->stacks[prio].size;
     const uintptr_t stack_top = base + size;
@@ -301,13 +296,13 @@ static inline struct hal_frame_t* _ac_intr_handler(
             mg_actor_call(next);
         } else {
             struct ac_actor_t* const actor = (struct ac_actor_t*) next;
-            const unsigned int level = actor->base.prio - AC_RSVD_PRIO_NUM;
+            const unsigned int prio = actor->base.prio;
 
-            context->preempted[level].frame = frame;
-            context->preempted[level].actor = context->running_actor;
+            context->preempted[prio].frame = frame;
+            context->preempted[prio].actor = context->running_actor;
             context->running_actor = actor;
             frame = _ac_frame_create(actor);
-            hal_intr_level(actor->base.prio);
+            hal_intr_level(prio);
             _ac_message_bind(actor);
             hal_mpu_reprogram(AC_REGIONS_NUM, actor->granted);
             hal_frame_set_arg(frame, actor->base.mailbox);
@@ -325,7 +320,7 @@ static inline struct hal_frame_t* _ac_intr_handler(
 static inline struct hal_frame_t* _ac_frame_restore_prev(void) {
     struct ac_context_t* const context = AC_GET_CONTEXT();
     struct ac_actor_t* const me = context->running_actor;
-    const unsigned int my_prio = me->base.prio - AC_RSVD_PRIO_NUM;
+    const unsigned int my_prio = me->base.prio;
     struct ac_actor_t* const prev = context->preempted[my_prio].actor;
     struct hal_frame_t* prev_frame = context->preempted[my_prio].frame;
 

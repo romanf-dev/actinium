@@ -50,6 +50,7 @@ start_bss_init:
 task_run:
     bl main
     svc 0                 /* Task return value is the syscall arg. */
+    b task_run
 
 .global _ac_syscall
 .section .text

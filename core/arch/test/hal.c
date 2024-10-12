@@ -71,9 +71,10 @@ void hal_swi_handler(void) {
          * longjmp and execution of the 'else' branch.
          */
         if (!setjmp(temp.context)) {
-            const uint32_t syscall = func(arg);
-            hal_syscall_handler(syscall);
-            assert(false);
+            for (;;) {
+                const uint32_t syscall = func(arg);
+                hal_syscall_handler(syscall);
+            }
         } else {
 
             /*

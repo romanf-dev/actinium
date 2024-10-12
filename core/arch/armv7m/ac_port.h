@@ -56,6 +56,10 @@ static inline void hal_intr_level(unsigned int level) {
     __set_BASEPRI(level << (8 - MG_NVIC_PRIO_BITS));
 }
 
+static inline void hal_init(void) {
+    hal_intr_level(1);
+}
+
 enum {
 /*     name      |   XN    |  AP[2:0]  | S C B bits | ENABLED */
     AC_ATTR_RO =             (6 << 24) | (2 << 16)  | 1,
@@ -111,3 +115,4 @@ static inline void hal_mpu_reprogram(
 }
 
 #endif
+

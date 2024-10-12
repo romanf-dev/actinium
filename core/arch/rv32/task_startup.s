@@ -32,6 +32,7 @@ init_done:
 task_run:
     jal     main    
     ecall   /* input value is in a0 returned by the main */
+    j       task_run
 
 .section .text
 
