@@ -1,6 +1,6 @@
 /** 
   ******************************************************************************
-  *  @file   actinium.s
+  *  @file   actinium0.s
   *  @brief  Low-level interrupt-entry functions for the Actinium framework.
   *          Here be dragons!
   *****************************************************************************/
@@ -43,17 +43,17 @@ target:
 .section .text
 
 .global ac_kernel_start
-.global ac_intr_entry
-.global ac_svc_entry
-.global ac_trap_entry
+.global ac_port_intr_entry
+.global ac_port_svc_entry
+.global ac_port_trap_entry
 
 /*
  * Interrupts may interrupt anything, so both cases must be covered:
  * interruption of privileged and unprivileged code.
  */
 
-.type ac_intr_entry, %function
-ac_intr_entry:
+.type ac_port_intr_entry, %function
+ac_port_intr_entry:
     mrs     r0, psp
     tst     lr, #4
     ite     eq              // Use SP or PSP as frame pointer depending on LR.
@@ -81,8 +81,8 @@ ac_intr_entry:
  * may only be thrown from usermode.
  */
 
-.type ac_trap_entry, %function
-ac_trap_entry:
+.type ac_port_trap_entry, %function
+ac_port_trap_entry:
     ldr     r0, =0xe000ed24 // Address of SHCSR.
     ldr     r1, [r0]
     bfc     r1, #12, #3
@@ -100,8 +100,8 @@ ac_trap_entry:
     bl      ac_trap_handler
     b       exc_return
 
-.type ac_svc_entry, %function
-ac_svc_entry:
+.type ac_port_svc_entry, %function
+ac_port_svc_entry:
     tst     lr, #4          // First call from main is a special case.
     bne     syscall         // It is used to enable unprivileged threads.
     mov     r0, sp          // SP is MSP and points to pushed hw frame here.
@@ -136,14 +136,11 @@ syscall:
     cpsie   i
     mrs     r1, psp
     bl      ac_svc_handler
-    b       exc_return
 
 /*
  * The most complex part. We came here with R0 pointing to the stack frame.
  * bit 0 value is 0 if the target mode is unprivileged and 1 otherwise.
  */
-
-.type exc_return, %function
 exc_return:
     ldr     lr, =0xFFFFFFF1 // Return to handler. Will be adjusted later.
     mrs     r1, psp

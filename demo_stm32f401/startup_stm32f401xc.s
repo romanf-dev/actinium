@@ -121,22 +121,22 @@ g_pfnVectors:
   .word  Reset_Handler
   .word  NMI_Handler
   .word  HardFault_Handler
-  .word  ac_trap_entry
-  .word  ac_trap_entry
-  .word  ac_trap_entry
+  .word  ac_port_trap_entry
+  .word  ac_port_trap_entry
+  .word  ac_port_trap_entry
   .word  0
   .word  0
   .word  0
   .word  0
-  .word  ac_svc_entry
+  .word  ac_port_svc_entry
   .word  DebugMon_Handler
   .word  0
   .word  PendSV_Handler
   .word  SysTick_Handler
   
   /* External Interrupts */
-  .word     ac_intr_entry                     /* Window WatchDog              */                                        
-  .word     ac_intr_entry                     /* PVD through EXTI Line detection */                        
+  .word     ac_port_intr_entry                /* Window WatchDog              */                                        
+  .word     ac_port_intr_entry                /* PVD through EXTI Line detection */                        
   .word     TAMP_STAMP_IRQHandler             /* Tamper and TimeStamps through the EXTI line */            
   .word     RTC_WKUP_IRQHandler               /* RTC Wakeup through the EXTI line */                      
   .word     FLASH_IRQHandler                  /* FLASH                        */                                          

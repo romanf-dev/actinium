@@ -14,43 +14,34 @@
 #define MTIMERCMP_BASE 0x2004000
 #define MSIP_BASE 0x2000000
 
-static inline void mtimer_setup(void) {
+/* required by the porting layer */
+void ac_port_mtimer_setup(void) {
     volatile uint64_t* const mtimecmp = (uint64_t*) MTIMERCMP_BASE;
     const uint64_t temp = *mtimecmp + UINT32_C(30);
     *mtimecmp = temp;
 }
 
-void __assert_func(const char *f, int line, const char *fn, const char *expr) {
-    serial_out("assert\r\n");
-    for(;;);
-}
-
-void ac_msip_set(unsigned int req) {
+/* required by the porting layer */
+void ac_gpic_req_set(unsigned int req) {
     volatile uint32_t* const msip = (uint32_t*) MSIP_BASE;
     *msip = req;
 }
 
-void ac_mtimer_handler(void) {
-    mtimer_setup();
-    mg_critical_section_leave();
-    ac_context_tick();
-    mg_critical_section_enter();
+/* required by the porting layer, external interrupts are unused here */
+void ac_port_mei_handler(void) {
+    ;
 }
 
-void* ac_intr_handler(uint32_t vect, void* frame) {
-    return _ac_intr_handler(vect, frame);
+void __assert_func(const char *f, int line, const char *fn, const char *expr) {
+    serial_out("assert:\r\n");
+    serial_out(expr);
+    for(;;);
 }
 
-void* ac_svc_handler(uint32_t arg, void* frame) {
-    return _ac_svc_handler(arg, frame);
-}
-
-void* ac_trap_handler(uint32_t id) {
-    return ac_actor_exception();
-}
-
-void ac_mei_handler(void) {
-
+/* required by the framework */
+void ac_actor_error(struct ac_actor_t* actor) {
+    serial_out("task crash, restart\r\n");
+    ac_actor_restart(actor);
 }
 
 struct mg_context_t g_mg_context;
@@ -67,18 +58,13 @@ struct ac_channel_t* ac_channel_validate(
     return (handle < max_id) ? &g_chan[handle] : 0;
 }
 
-void ac_actor_error(struct ac_actor_t* actor) {
-    serial_out("task crash, restart\r\n");
-    ac_actor_restart(actor);
-}
-
 int main(void) {
     /*hw init*/
 
     /* 
      * Base address of flash and its size.
      */
-    ac_context_init(0x20400000, 0x10000);
+    ac_context_init();
 
     /* 
      * Both actors share the same priority 2 so there's only one stack.
@@ -109,7 +95,7 @@ int main(void) {
     ac_actor_init(&g_sender, 1, 1);
     ac_actor_allow(&g_sender, 32, (void*)SERIAL_BASE, AC_ATTR_DEV);
 
-    mtimer_setup();
+    ac_port_mtimer_setup();
     ac_kernel_start(); /* Does not return. */
 
     return 0;

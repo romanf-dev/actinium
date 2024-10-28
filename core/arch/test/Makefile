@@ -1,9 +1,9 @@
 
 %.o : %.c
-	gcc -g -O2 -I ../rv32 -I ../.. -I ../../../magnesium -c -o $@ $<
+	gcc -g -std=c11 -O2 -I . -I ../.. -I ../../../magnesium -c -o $@ $<
 
-all : hal.o
-	gcc -r -o actinium.o hal.o
+all : core.o
+	gcc -r -o actinium.o core.o
 
 clean:
 	rm -f *.o

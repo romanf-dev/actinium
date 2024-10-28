@@ -1,7 +1,7 @@
 /** 
   ******************************************************************************
-  *  @file   SiFive.h
-  *  @brief  Intermediate kernel linker script.
+  *  @file   kernel.h
+  *  @brief  Kernel linker script for SiFive e31.
   *****************************************************************************/
 
 OUTPUT_ARCH( "riscv" )
@@ -12,7 +12,7 @@ MEMORY
 	sram (rw) : ORIGIN = 0x80000000, LENGTH = 16k
 }
 
-_estack = 0x80000000 + 0x4000;
+_estack = ORIGIN(sram) + LENGTH(sram);
 
 SECTIONS
 {

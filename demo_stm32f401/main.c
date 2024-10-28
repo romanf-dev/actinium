@@ -33,18 +33,6 @@ void __assert_func(
     Error_Handler();
 }
 
-void* ac_intr_handler(uint32_t vect, void* frame) {
-    return _ac_intr_handler(vect, frame);
-}
-
-void* ac_svc_handler(uint32_t arg, void* frame) {
-    return _ac_svc_handler(arg, frame);
-}
-
-void* ac_trap_handler(uint32_t id) {
-    return ac_actor_exception();
-}
-
 struct mg_context_t g_mg_context;
 struct ac_context_t g_ac_context; 
 
@@ -112,7 +100,7 @@ int main(void) {
     /* 
      * Base address of flash and its size.
      */
-    ac_context_init(0x08000000, 0x40000);
+    ac_context_init();
 
     /* 
      * Both actors share the same priority 2 so there's only one stack.

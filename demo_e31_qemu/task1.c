@@ -18,15 +18,15 @@ uint32_t main(void) {
     AC_ACTOR_START;
 
     for (;;) {
-        AC_AWAIT(act_sleep_for(1000));
+        AC_AWAIT(ac_sleep_for(1000));
 
-        struct example_msg_t* msg = act_try_pop(0);
+        struct example_msg_t* msg = ac_try_pop(0);
         
         for (size_t i = 0; i < sizeof(g_str); ++i) {
             msg->text[i] = g_str[i];
         }
 
-        act_push(1);
+        ac_push(1);
     }
 
     AC_ACTOR_END;

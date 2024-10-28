@@ -1,6 +1,6 @@
 /** 
   ******************************************************************************
-  *  @file   main.c
+  *  @file   startup.s
   *  @brief  Low level entry point.
   *****************************************************************************/
 
@@ -17,7 +17,7 @@ NMI_Handler:
 .section .text
 
 startup:
-	la      t0, ac_intr_entry
+	la      t0, ac_port_intr_entry
 	csrw    mtvec, t0
 	la      sp, _estack
 	csrc    mstatus, 8

@@ -18,7 +18,7 @@ uint32_t main(const struct example_msg_t* msg) {
     AC_ACTOR_START;
     
     for (;;) {
-        AC_AWAIT(act_subscribe_to(1));
+        AC_AWAIT(ac_subscribe_to(1));
         serial_out(msg->text);
 
         if (++counter == 3) {

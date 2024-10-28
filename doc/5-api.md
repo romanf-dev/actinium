@@ -17,10 +17,7 @@ actors and channels and interrupt redirection.
 
 Initialization of the global data, runqueues, etc.
 
-        void ac_context_init(
-            uintptr_t flash_base, 
-            size_t flash_size
-        );
+        void ac_context_init();
 
 Set stack for priority specified. Pointer/size are subject for MPU 
 restrictions: memory must be power-2-sized and aligned to its size.
@@ -114,25 +111,7 @@ message may be sent into a channel to notify another actor, etc.
 
         extern void ac_actor_error(struct ac_actor_t* src);
 
-These functions are wrappers for internal functions. They may be used for
-some extra logic or for debugging/logging etc. Default implementations
-are as follows:
 
-        extern void* ac_intr_handler(uint32_t vect, void* frame) {
-            return _ac_intr_handler(vect, frame);
-        }
-
-        extern void* ac_svc_handler(uint32_t arg, void* frame) {
-            return _ac_svc_handler(arg, frame);
-        }
-
-        extern void* ac_trap_handler(uint32_t exception_id) {
-            return ac_actor_exception();
-        }
-
-
-Trap handler does not accept frame pointer as frame may be broken by the user
-and it is not safe to access the stack.
 
 
 Unprivileged API (Rust)

@@ -5,10 +5,10 @@ GCC_PREFIX ?= riscv-none-elf-
 	$(GCC_PREFIX)gcc -march=rv32izicsr -c -o $@ $<
 
 %.o : %.c
-	$(GCC_PREFIX)gcc -march=rv32izicsr -c -o $@ $<
+	$(GCC_PREFIX)gcc -O2 -ffreestanding -march=rv32izicsr -c -I ../.. -I ../../../magnesium -I . -o $@ $<
 
-all : task_startup.o traps.o hal.o
-	$(GCC_PREFIX)ld -r -n -T script.ld -o actinium.o hal.o traps.o
+all : task_startup.o traps.o core.o
+	$(GCC_PREFIX)ld -r -n -o actinium.o core.o traps.o
 
 clean:
 	rm -f *.o

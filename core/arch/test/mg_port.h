@@ -1,13 +1,13 @@
 /** 
   * @file  mg_port.h
-  * @brief Magnesium porting layer for generic RISCV32.
+  * @brief Magnesium porting layer for hosted test environment.
   * License: Public domain. The code is provided as is without any warranty.
   */
 #ifndef _MG_PORT_H_
 #define _MG_PORT_H_
 
 #if !defined (__GNUC__)
-#error This header is intended to be used in GNU GCC only because of non-portable asm functions. 
+#error This header is intended to be used in GNU GCC only because of non-portable builtins. 
 #endif
 
 #if !defined MG_PRIO_MAX

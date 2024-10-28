@@ -17,9 +17,9 @@ kregs:
 .section .text
 
 .global ac_kernel_start
-.global ac_intr_entry
-.global hal_pmp_update_entry3
-.global hal_pmp_reprogram
+.global ac_port_intr_entry
+.global ac_pmp_update_entry3
+.global ac_pmp_reprogram
 
 .set SMALL_FRAME_SZ,(18*4)
 .set FULL_FRAME_SZ,(33*4)
@@ -37,7 +37,7 @@ kregs:
  * - a0/x10 may hold syscall parameter so it must not be overwritten until it
  *   is known that the current exception is not a syscall.
  */
-ac_intr_entry:
+ac_port_intr_entry:
     csrrw   sp, mscratch, sp 
     bne     sp, zero, from_umode
     csrrw   sp, mscratch, sp
@@ -122,27 +122,27 @@ exception:
     beq     t0, t1, envcall
     csrr    a0, mcause              /* the exception is not a syscall */
     mv      s0, a1                  /* preserve the pointer to the frame */
-    jal     hal_trap_handler
+    jal     ac_port_trap_handler
     addi    sp, s0, FULL_FRAME_SZ   /* skip the saved stack frame */
     j       context_restore
 hwintr:
-    jal     hal_intr_handler
+    jal     ac_port_intr_handler
     j       context_restore
 swintr:
-    jal     hal_msi_handler
+    jal     ac_port_msi_handler
     j       context_restore
 envcall:
     mv      s0, a1                  /* preserve the ptr to the syscall frame */
     lw      t0, 4(a1)
     addi    t0, t0, 4               /* adjust pc to point after ecall */
     sw      t0, 4(a1)
-    jal     hal_ecall_handler
+    jal     ac_port_ecall_handler
     beq     a0, s0, skip_sp_adjust
     addi    sp, s0, FULL_FRAME_SZ   /* skip the syscall frame on async call */
 skip_sp_adjust:
     j       context_restore
 mtimer:
-    jal     hal_mtimer_handler
+    jal     ac_port_mtimer_handler
 
 context_restore:                    /* a0 points to context, MIE = 0 */
     mv      x31, a0
@@ -228,14 +228,14 @@ wait:
     wfi
     j       wait
 
-hal_pmp_update_entry3:
+ac_pmp_update_entry3:
     bne     a0, zero, update
     csrr    a0, pmpaddr2
 update:
     csrw    pmpaddr3, a0
     ret
 
-hal_pmp_reprogram:
+ac_pmp_reprogram:
     lw      a1, 0(a0)
     csrw    pmpaddr0, a1
     lw      a1, 4(a0)

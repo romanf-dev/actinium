@@ -10,6 +10,10 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
+#include <stdnoreturn.h>
+#include "magnesium.h"
+#include "ac_port.h"
 
 enum {
     AC_CALL_DELAY,
@@ -20,13 +24,6 @@ enum {
     AC_CALL_FREE,
     AC_CALL_MAX
 };
-
-#ifndef AC_TASK /* Part of the framework to be used by privileged code. */
-
-#include <stdbool.h>
-#include <stdnoreturn.h>
-#include "magnesium.h"
-#include "ac_port.h"
 
 enum {
     AC_REGION_FLASH,
@@ -55,7 +52,7 @@ struct ac_message_t {
 
 struct ac_actor_t {
     struct mg_actor_t base;
-    struct hal_region_t granted[AC_REGIONS_NUM];
+    struct ac_port_region_t granted[AC_REGIONS_NUM];
     uintptr_t func;
     bool restart_req;
 
@@ -68,10 +65,10 @@ struct ac_actor_t {
 
 struct ac_context_t {
     struct ac_actor_t* running_actor;
-    struct hal_region_t granted[AC_REGIONS_NUM];
+    struct ac_port_region_t granted[AC_REGIONS_NUM];
 
     struct {
-        struct hal_frame_t* frame;
+        struct ac_port_frame_t* frame;
         struct ac_actor_t* actor;
     } preempted[MG_PRIO_MAX];
 
@@ -106,17 +103,10 @@ extern struct ac_channel_t* ac_channel_validate(
 extern struct ac_context_t g_ac_context;
 #define AC_GET_CONTEXT() (&g_ac_context)
 
-static inline void ac_context_init(uintptr_t ro_base, size_t ro_size) {
+static inline void ac_context_init(void) {
     struct ac_context_t* const context = AC_GET_CONTEXT();
-    struct hal_region_t* const regions = &context->granted[0];
-    extern const uint8_t _estack;
-    const uintptr_t stack = (uintptr_t)&_estack - HAL_CONTEXT_SZ;
-
     mg_context_init();
-    hal_init();
-    hal_region_init(&regions[AC_REGION_FLASH], ro_base, ro_size, AC_ATTR_RO);
-    hal_region_init(&regions[AC_REGION_STACK], stack, HAL_CONTEXT_SZ, AC_ATTR_RW);
-    hal_mpu_reprogram(AC_REGIONS_NUM, regions);
+    ac_port_init(AC_REGIONS_NUM, context->granted);
 }
 
 static inline void ac_context_tick(void) {
@@ -127,7 +117,7 @@ static inline void ac_context_stack_set(unsigned prio, size_t sz, void* ptr) {
     struct ac_context_t* const context = AC_GET_CONTEXT();
 
     assert((sz & (sz - 1)) == 0);
-    assert(sz > HAL_CONTEXT_SZ);
+    assert(sz > sizeof(struct ac_port_frame_t));
     context->stacks[prio].addr = (uintptr_t) ptr;
     context->stacks[prio].size = sz;
 }
@@ -161,12 +151,12 @@ static inline void _ac_message_bind(struct ac_actor_t* actor) {
 
     if (msg && not_bound) {
         struct ac_channel_t* const parent = (void*) msg->header.parent;
-        struct hal_region_t* const region = &actor->granted[AC_REGION_MSG];       
+        struct ac_port_region_t* const region = &actor->granted[AC_REGION_MSG];       
         actor->msg.parent = parent;
         actor->msg.type = parent->msg_type;
         actor->msg.size = parent->base.block_sz;
         msg->size = actor->msg.size;
-        hal_region_init(region, (uintptr_t)msg, actor->msg.size, AC_ATTR_RW);
+        ac_port_region_init(region, (uintptr_t)msg, actor->msg.size, AC_ATTR_RW);
     }
 }
 
@@ -178,7 +168,7 @@ static inline void _ac_message_unbind(struct ac_actor_t* actor) {
     actor->msg.parent = 0;
     actor->msg.type = 0;
     actor->msg.size = 0;
-    hal_region_init(&actor->granted[AC_REGION_MSG], 0, 0, AC_ATTR_RW);
+    ac_port_region_init(&actor->granted[AC_REGION_MSG], 0, 0, AC_ATTR_RW);
 }
 
 static inline void _ac_message_release(struct ac_actor_t* actor, bool poisoned) {
@@ -212,7 +202,7 @@ static inline void ac_actor_init(
     extern const uintptr_t _ac_task_mem_map[]; /* From the linker script. */
     const uintptr_t* const config = (const uintptr_t*) &_ac_task_mem_map;
     const size_t task_num = config[0];
-    struct hal_region_t* regions = actor->granted;
+    struct ac_port_region_t* regions = actor->granted;
     const struct {
         uintptr_t flash_addr;
         uintptr_t flash_size;
@@ -232,25 +222,25 @@ static inline void ac_actor_init(
 
     struct ac_context_t* const context = AC_GET_CONTEXT();
 
-    hal_region_init(
+    ac_port_region_init(
         &regions[AC_REGION_FLASH], 
         slot[task_id].flash_addr, 
         slot[task_id].flash_size, 
         AC_ATTR_RO
     );
-    hal_region_init(
+    ac_port_region_init(
         &regions[AC_REGION_SRAM], 
         slot[task_id].sram_addr, 
         slot[task_id].sram_size, 
         AC_ATTR_RW
     );
-    hal_region_init(
+    ac_port_region_init(
         &regions[AC_REGION_STACK], 
         context->stacks[actor->base.prio].addr, 
         context->stacks[actor->base.prio].size, 
         AC_ATTR_RW
     );
-    hal_region_init(&regions[AC_REGION_MSG], 0, 0, AC_ATTR_RW);
+    ac_port_region_init(&regions[AC_REGION_MSG], 0, 0, AC_ATTR_RW);
     _mg_actor_activate(&actor->base);
 }
 
@@ -261,10 +251,17 @@ static inline void ac_actor_allow(
     unsigned int attr
 ) {
     assert((size & (size - 1)) == 0);
-    hal_region_init(&actor->granted[AC_REGION_USER], (uintptr_t)base, size, attr);
+    ac_port_region_init(
+        &actor->granted[AC_REGION_USER], 
+        (uintptr_t)base, 
+        size, 
+        attr
+    );
 }
 
-static inline struct hal_frame_t* _ac_frame_create(struct ac_actor_t* actor) {
+static inline struct ac_port_frame_t* _ac_frame_create(
+    struct ac_actor_t* actor
+) {
     const struct ac_context_t* const context = AC_GET_CONTEXT();
     const unsigned int prio = actor->base.prio;
     const uintptr_t base = context->stacks[prio].addr;
@@ -274,15 +271,15 @@ static inline struct hal_frame_t* _ac_frame_create(struct ac_actor_t* actor) {
 
     actor->restart_req = false;
     assert(base != 0);
-    return hal_frame_alloc(stack_top, actor->func, restart_req);
+    return ac_port_frame_alloc(stack_top, actor->func, restart_req);
 }
 
-static inline struct hal_frame_t* _ac_intr_handler(
+static inline struct ac_port_frame_t* _ac_intr_handler(
     uint32_t vect, 
-    struct hal_frame_t* prev_frame
+    struct ac_port_frame_t* prev_frame
 ) {
     struct ac_context_t* const context = AC_GET_CONTEXT();
-    struct hal_frame_t* frame = prev_frame;
+    struct ac_port_frame_t* frame = prev_frame;
 
     for (;;) {
         bool last = false;
@@ -302,10 +299,10 @@ static inline struct hal_frame_t* _ac_intr_handler(
             context->preempted[prio].actor = context->running_actor;
             context->running_actor = actor;
             frame = _ac_frame_create(actor);
-            hal_intr_level(prio);
+            ac_port_level_mask(prio);
             _ac_message_bind(actor);
-            hal_mpu_reprogram(AC_REGIONS_NUM, actor->granted);
-            hal_frame_set_arg(frame, actor->base.mailbox);
+            ac_port_mpu_reprogram(AC_REGIONS_NUM, actor->granted);
+            ac_port_frame_set_arg(frame, actor->base.mailbox);
 
             if (!last) {
                 pic_interrupt_request(vect);
@@ -317,12 +314,12 @@ static inline struct hal_frame_t* _ac_intr_handler(
     return frame;
 }
 
-static inline struct hal_frame_t* _ac_frame_restore_prev(void) {
+static inline struct ac_port_frame_t* _ac_frame_restore_prev(void) {
     struct ac_context_t* const context = AC_GET_CONTEXT();
     struct ac_actor_t* const me = context->running_actor;
     const unsigned int my_prio = me->base.prio;
     struct ac_actor_t* const prev = context->preempted[my_prio].actor;
-    struct hal_frame_t* prev_frame = context->preempted[my_prio].frame;
+    struct ac_port_frame_t* prev_frame = context->preempted[my_prio].frame;
 
     assert(me != 0);
     context->preempted[my_prio].frame = 0;
@@ -330,11 +327,11 @@ static inline struct hal_frame_t* _ac_frame_restore_prev(void) {
     context->running_actor = prev;
 
     if (prev == 0) {       /* prev = 0 when returning into idle-loop */
-        hal_intr_level(0);
-        hal_mpu_reprogram(AC_REGIONS_NUM, context->granted);
+        ac_port_level_mask(0);
+        ac_port_mpu_reprogram(AC_REGIONS_NUM, context->granted);
     } else {
-        hal_intr_level(prev->base.prio);
-        hal_mpu_reprogram(AC_REGIONS_NUM, prev->granted);
+        ac_port_level_mask(prev->base.prio);
+        ac_port_mpu_reprogram(AC_REGIONS_NUM, prev->granted);
     }
 
     return prev_frame;
@@ -345,7 +342,7 @@ static inline void ac_actor_restart(struct ac_actor_t* actor) {
     _mg_actor_activate(&actor->base);
 }
 
-static inline struct hal_frame_t* ac_actor_exception(void) {
+static inline struct ac_port_frame_t* ac_actor_exception(void) {
     struct ac_context_t* const context = AC_GET_CONTEXT();
     struct ac_actor_t* const me = context->running_actor;
     assert(me != 0);
@@ -388,7 +385,7 @@ static inline void _ac_sys_push(struct ac_actor_t* actor, uintptr_t req) {
 
     if (chan) {
         _ac_channel_push(actor, chan);
-        hal_mpu_update_region(AC_REGION_MSG, &actor->granted[AC_REGION_MSG]);
+        ac_port_update_region(AC_REGION_MSG, &actor->granted[AC_REGION_MSG]);
     }
 }
 
@@ -399,24 +396,24 @@ static inline void _ac_sys_trypop(struct ac_actor_t* actor, uintptr_t req) {
         _ac_message_release(actor, false);
         actor->base.mailbox = mg_message_alloc(&chan->base);
         _ac_message_bind(actor);
-        hal_mpu_update_region(AC_REGION_MSG, &actor->granted[AC_REGION_MSG]);
+        ac_port_update_region(AC_REGION_MSG, &actor->granted[AC_REGION_MSG]);
     }
 }
 
 static inline void _ac_sys_free(struct ac_actor_t* actor) {
     _ac_message_release(actor, false);
-    hal_mpu_update_region(AC_REGION_MSG, &actor->granted[AC_REGION_MSG]);
+    ac_port_update_region(AC_REGION_MSG, &actor->granted[AC_REGION_MSG]);
 }
 
-static inline struct hal_frame_t* _ac_svc_handler(
-    uint32_t r0, 
-    struct hal_frame_t* prev_frame
+static inline struct ac_port_frame_t* _ac_svc_handler(
+    uint32_t syscall, 
+    struct ac_port_frame_t* prev_frame
 ) {
     const struct ac_context_t* const context = AC_GET_CONTEXT();    
     struct ac_actor_t* const actor = context->running_actor;
-    struct hal_frame_t* frame = prev_frame;
-    const uint32_t opcode = r0 >> 28;
-    const uint32_t arg = r0 & UINT32_C(0x0fffffff);
+    struct ac_port_frame_t* frame = prev_frame;
+    const uint32_t opcode = syscall >> 28;
+    const uint32_t arg = syscall & UINT32_C(0x0fffffff);
 
     if (opcode < AC_CALL_MAX) {
         switch (opcode) {
@@ -438,7 +435,7 @@ static inline struct hal_frame_t* _ac_svc_handler(
         }
 
         if (opcode > AC_CALL_LAST_ASYNC) {
-            hal_frame_set_arg(frame, actor->base.mailbox);
+            ac_port_frame_set_arg(frame, actor->base.mailbox);
         } else {
             frame = _ac_frame_restore_prev();
         }
@@ -449,44 +446,5 @@ static inline struct hal_frame_t* _ac_svc_handler(
     return frame;
 }
 
-#else /* ifndef AC_TASK */
-
-struct ac_message_t {
-    size_t size;
-    uintptr_t padding[2];
-    uintptr_t poisoned;
-};
-
-extern void* _ac_syscall(uint32_t arg);
-
-static inline uint32_t _ac_syscall_val(uint32_t id, uint32_t arg) {
-    return (id << 28) | (arg & UINT32_C(0x0fffffff));
-}
-
-static inline uint32_t act_sleep_for(uint32_t delay) {
-    return _ac_syscall_val(AC_CALL_DELAY, delay);
-}
-
-static inline uint32_t act_subscribe_to(unsigned int id) {
-    return _ac_syscall_val(AC_CALL_SUBSCRIBE, id);
-}
-
-static inline void* act_try_pop(unsigned int id) {
-    return _ac_syscall(_ac_syscall_val(AC_CALL_TRY_POP, id));
-}
-
-static inline void* act_push(unsigned int id) {
-    return _ac_syscall(_ac_syscall_val(AC_CALL_PUSH, id));
-}
-
-static inline void act_free(void) {
-    (void) _ac_syscall(AC_CALL_FREE << 28);
-}
-
-#define AC_ACTOR_START static int _ac_state = 0; switch(_ac_state) { case 0:
-#define AC_ACTOR_END } return 0
-#define AC_AWAIT(q) _ac_state = __LINE__; return (q); case __LINE__:
-
-#endif /* ifndef AC_TASK */
 #endif /* header guard */
 

@@ -26,7 +26,7 @@ uint32_t main(const struct led_msg_t* msg) {
     AC_ACTOR_START;
     
     for (;;) {
-        AC_AWAIT(act_subscribe_to(1));
+        AC_AWAIT(ac_subscribe_to(1));
         set_led(msg->control);
 
         if (++counter == 20) {
