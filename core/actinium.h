@@ -305,7 +305,7 @@ static inline struct ac_port_frame_t* _ac_intr_handler(
             ac_port_frame_set_arg(frame, actor->base.mailbox);
 
             if (!last) {
-                pic_interrupt_request(vect);
+                pic_interrupt_request(0, vect);
             }
             break;
         }
@@ -356,7 +356,7 @@ static inline void _ac_sys_timeout(struct ac_actor_t* actor, uintptr_t req) {
     actor->base.timeout = (uint32_t) req;
 
     if (req) {
-        _mg_actor_timeout(actor->base.parent, &actor->base);
+        _mg_actor_timeout(&actor->base);
     } else {
         _mg_actor_activate(&actor->base);
     }
