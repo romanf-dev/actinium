@@ -7,9 +7,14 @@
 #include <stdint.h>
 #include <stdalign.h>
 #include <stdnoreturn.h>
-#include "stm32f4xx.h"
 #include "actinium.h"
 #include "led_msg.h"
+#define __NVIC_PRIO_BITS 3
+#include "stm32f4xx.h"
+
+#if __NVIC_PRIO_BITS != MG_NVIC_PRIO_BITS
+#error NVIC priority bits do not match in the kernel and chip header.
+#endif
 
 static noreturn void Error_Handler(void) {
     __disable_irq();
@@ -116,9 +121,9 @@ int main(void) {
     ac_channel_init(&g_chan[1], 1);
 
     /* 
-     * This chip has 4 priority bits, subpriority is 3:0.
+     * Use 8 priority levels, so five subpriority bits are 4:0.
      */
-    NVIC_SetPriorityGrouping(3);
+    NVIC_SetPriorityGrouping(4);
 
     /* 
      * Enable two first vectors and set priotity 2.
