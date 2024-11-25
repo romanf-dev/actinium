@@ -4,15 +4,15 @@ GCC_PREFIX ?= riscv-none-elf-
 .PHONY: all clean fwk tasks kernel
 
 %.o : %.c
-	$(GCC_PREFIX)gcc -pedantic -ffreestanding -Wall -O2 -march=rv32izicsr -I ../core -I ../core/arch/rv32 -I ../magnesium -I . -c -o $@ $<
+	$(GCC_PREFIX)gcc -ffreestanding -Wall -O2 -march=rv32izicsr -I ../core -I ../core/arch/rv32 -I ../magnesium -I . -c -o $@ $<
 
 task%.o : task%.c
-	$(GCC_PREFIX)gcc -pedantic -ffreestanding -Wall -O2 -march=rv32i -I ../core/c_task -I . -c -o $@ $<
+	$(GCC_PREFIX)gcc -ffreestanding -Wall -O2 -march=rv32i -I ../core/c_task -I . -c -o $@ $<
 
 %.o : %.s
 	$(GCC_PREFIX)gcc -march=rv32izicsr -c -o $@ $<
 
-all : tasks kernel
+all : clean tasks kernel
 	rm main.o startup.o task0.o task1.o
 	../core/ldgen.sh 0x20400000 0x80000000 $(GCC_PREFIX)
 	$(GCC_PREFIX)ld -n -o image.elf -T ldscript.ld

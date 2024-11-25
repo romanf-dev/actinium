@@ -4,7 +4,7 @@
 %.o : %.c
 	gcc -pedantic -std=c11 -Wall -O2 -g -Wall -I ../core -I ../core/arch/test -I ../magnesium -I . -c -o $@ $<
 
-all : fwk test0.o
+all : clean fwk test0.o
 	gcc -o test test0.o ../core/arch/test/actinium.o
 
 fwk : 

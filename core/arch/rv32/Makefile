@@ -1,4 +1,6 @@
 
+.PHONY: clean all
+
 GCC_PREFIX ?= riscv-none-elf-
 
 %.o : %.s
@@ -7,7 +9,7 @@ GCC_PREFIX ?= riscv-none-elf-
 %.o : %.c
 	$(GCC_PREFIX)gcc -O2 -ffreestanding -march=rv32izicsr -c -I ../.. -I ../../../magnesium -I . -o $@ $<
 
-all : task_startup.o traps.o core.o
+all : clean task_startup.o traps.o core.o
 	$(GCC_PREFIX)ld -r -n -o actinium.o core.o traps.o
 
 clean:
