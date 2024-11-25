@@ -26,7 +26,7 @@
 extern void mg_interrupt_request(unsigned int vect);
 
 #define pic_vect2prio(v) (v)
-#define pic_interrupt_request(v) mg_interrupt_request(v)
+#define pic_interrupt_request(cpu,v) mg_interrupt_request(v)
 
 #endif
 
