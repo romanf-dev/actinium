@@ -135,6 +135,7 @@ syscall:
     str     r3, [r1]
     cpsie   i
     mrs     r1, psp
+    ldr     r0, [r1]        // pushed registers are in unknown state in armv7
     bl      ac_svc_handler
 
 /*
