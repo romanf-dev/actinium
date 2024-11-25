@@ -90,9 +90,11 @@ Files
 |----------------|-------------|
 |arch/armv7m | hardware abstraction layer for ARMv7-M |
 |arch/rv32 | hardware abstraction layer for RISC-V |
+|arch/test | abstraction layer for hosted environment |
 |actinium.h | cross-platform framework functions |
 |rust_task | library for Rust tasks support |
 |cpp_task | library for C++ tasks support |
+|c_task | library for C tasks support |
 |ldgen.sh | linker script generator to place kernel and actors in memory |
 
 
