@@ -62,12 +62,6 @@ uint32_t actor2(void* arg) {
     return 0;
 }
 
-const uintptr_t _ac_task_mem_map[] = {
-    2, 
-    (uintptr_t) actor1, 32, 32, 32, 
-    (uintptr_t) actor2, 32, 32, 32
-};
-
 int main(void) {
     /* 
      * Base address of flash and its size.
@@ -88,10 +82,12 @@ int main(void) {
     ac_channel_init(&g_chan[1], 1);
     
     static struct ac_actor_t g_receiver;
-    ac_actor_init(&g_receiver, 1, 0);
+    struct ac_actor_descr_t receiver_descr = { (uintptr_t) actor1, 32, 32, 32 };
+    ac_actor_init(&g_receiver, 1, &receiver_descr);
 
     static struct ac_actor_t g_sender;
-    ac_actor_init(&g_sender, 1, 1);
+    struct ac_actor_descr_t sender_descr = { (uintptr_t) actor2, 32, 32, 32 };
+    ac_actor_init(&g_sender, 1, &sender_descr);
 
     ac_port_swi_handler();
     printf("exiting...\r\n");

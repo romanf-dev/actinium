@@ -44,6 +44,29 @@ void ac_actor_error(struct ac_actor_t* actor) {
     ac_actor_restart(actor);
 }
 
+static struct ac_actor_descr_t* descr_by_id(unsigned int task_id) {
+    extern const uintptr_t _ac_task_mem_map[]; /* From the linker script. */
+    const uintptr_t* const config = (const uintptr_t*) &_ac_task_mem_map;
+    const size_t task_num = config[0];
+    const struct {
+        uintptr_t flash_addr;
+        uintptr_t flash_size;
+        uintptr_t sram_addr; 
+        uintptr_t sram_size;
+    } * const slot = (void*) (config + 1);
+
+    _Static_assert(sizeof(*slot) == sizeof(uintptr_t) * 4, "padding");
+    assert(task_id < task_num);
+    static struct ac_actor_descr_t descr;
+
+    descr.flash_addr = slot[task_id].flash_addr;
+    descr.flash_size = slot[task_id].flash_size;
+    descr.sram_addr = slot[task_id].sram_addr;
+    descr.sram_size = slot[task_id].sram_size;
+
+    return &descr;
+}
+
 struct mg_context_t g_mg_context;
 struct ac_context_t g_ac_context; 
 
@@ -85,14 +108,14 @@ int main(void) {
      * id. 
      */
     static struct ac_actor_t g_receiver;
-    ac_actor_init(&g_receiver, 1, 0);
+    ac_actor_init(&g_receiver, 1, descr_by_id(0));
     ac_actor_allow(&g_receiver, 32, (void*)SERIAL_BASE, AC_ATTR_DEV);
 
     /* 
      * Create the 'sender' actor, who sends messages.
      */
     static struct ac_actor_t g_sender;
-    ac_actor_init(&g_sender, 1, 1);
+    ac_actor_init(&g_sender, 1, descr_by_id(1));
     ac_actor_allow(&g_sender, 32, (void*)SERIAL_BASE, AC_ATTR_DEV);
 
     ac_port_mtimer_setup();

@@ -61,14 +61,13 @@ Default channel with no associated memory. Cannot be message parent.
             int msg_type
         );
 
-Actor initialization. Task_id is the number of application stored on
-the flash. ldgen script puts tasks alphabetically, so task_id 0 is the
-first object file in the build folder in alphabetical order.
+Actor initialization. Task descriptor is a struct describing actor 
+memory: flash and SRAM base address and size.
 
         void ac_actor_init(
             struct ac_actor_t* actor, 
             unsigned int vector,
-            unsigned int task_id
+            const struct ac_actor_descr_t* descr
         );
 
 Allow actor to access a region. Only one region per actor is allowed at

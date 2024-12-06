@@ -194,27 +194,21 @@ static inline void _ac_channel_push(
     }
 }
 
+struct ac_actor_descr_t {
+    uintptr_t flash_addr;
+    size_t flash_size;
+    uintptr_t sram_addr; 
+    size_t sram_size;
+};
+
 static inline void ac_actor_init(
     struct ac_actor_t* actor, 
     unsigned int vect,
-    unsigned int task_id
+    struct ac_actor_descr_t* descr
 ) {
-    extern const uintptr_t _ac_task_mem_map[]; /* From the linker script. */
-    const uintptr_t* const config = (const uintptr_t*) &_ac_task_mem_map;
-    const size_t task_num = config[0];
     struct ac_port_region_t* regions = actor->granted;
-    const struct {
-        uintptr_t flash_addr;
-        uintptr_t flash_size;
-        uintptr_t sram_addr; 
-        uintptr_t sram_size;
-    } * const slot = (void*) (config + 1);
-
-    _Static_assert(sizeof(*slot) == sizeof(uintptr_t) * 4, "padding");
-    assert(task_id < task_num);
-
     mg_actor_init(&actor->base, 0, vect, 0); /* Null func means usermode. */
-    actor->func = slot[task_id].flash_addr;
+    actor->func = descr->flash_addr;
     actor->restart_req = true;
     actor->msg.parent = 0;
     actor->msg.size = 0;
@@ -224,14 +218,14 @@ static inline void ac_actor_init(
 
     ac_port_region_init(
         &regions[AC_REGION_FLASH], 
-        slot[task_id].flash_addr, 
-        slot[task_id].flash_size, 
+        descr->flash_addr, 
+        descr->flash_size, 
         AC_ATTR_RO
     );
     ac_port_region_init(
         &regions[AC_REGION_SRAM], 
-        slot[task_id].sram_addr, 
-        slot[task_id].sram_size, 
+        descr->sram_addr, 
+        descr->sram_size, 
         AC_ATTR_RW
     );
     ac_port_region_init(
