@@ -10,23 +10,16 @@ section_sz() {
 }
 
 round_to_power2() {
-    local counter=0
     local tmp=$1
-    if [ $(( $tmp & ($tmp - 1) )) -ne 0 ]; then
-        while (($tmp >> $counter)); do
-            ((counter++))
-        done
-        f=$((1 << counter))
-    else
-        f=$tmp
-    fi
-    if [ $f -ne 0 ]; then    
-        if [ $f -lt 32 ]; then
-            echo 32
-            return
-        fi
-    fi
-    echo $f
+    ((tmp |= 31 * ($tmp != 0)))
+    ((tmp -= ($tmp != 0)))
+    ((tmp |= $tmp >> 1))
+    ((tmp |= $tmp >> 2))
+    ((tmp |= $tmp >> 4))
+    ((tmp |= $tmp >> 8))
+    ((tmp |= $tmp >> 16))
+    ((tmp += ($tmp != 0)))
+    echo $tmp
 }
 
 alignas() {
