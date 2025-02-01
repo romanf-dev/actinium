@@ -1,10 +1,13 @@
 /** 
   ******************************************************************************
-  *  @file   core.c
+  *  @file   ac_core.h
   *  @brief  Hosted HAL for Actinium execution inside the host OS thread.
-  *          Intended to be used for tests but also may be useful for 
+  *          Intended to be used for unit tests but also may be useful for 
   *          prototyping.
   *****************************************************************************/
+
+#ifndef AC_CORE_H
+#define AC_CORE_H
 
 #include <stdint.h>
 #include <assert.h>
@@ -131,4 +134,5 @@ void ac_port_trap_handler(uint32_t id) {
     struct ac_port_frame_t* const frame = ac_actor_exception();
     longjmp(frame->context, 0);
 }
+#endif
 
