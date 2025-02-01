@@ -125,9 +125,6 @@ int main(void) {
     __DSB();
     __ISB();
 
-    /* 
-     * Base address of flash and its size.
-     */
     ac_context_init();
 
     /* 
