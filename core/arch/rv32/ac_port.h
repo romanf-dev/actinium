@@ -85,27 +85,20 @@ static inline void ac_port_level_mask(unsigned int level) {
     /* unused */
 }
 
-/* This port uses fixed region types, flash is RO, other regions are RW.
- * In case when message region (index 3) is disabled, the corresponding 
- * register pmpaddr3 contains the same value as in pmpaddr2 (SRAM region).
- */
 enum {
-    AC_ATTR_RO = 0,
-    AC_ATTR_RW = 1,
-    AC_ATTR_DEV= 2,
+    AC_ATTR_RO = 0x1d,
+    AC_ATTR_RW = 0x1b,
+    AC_ATTR_DEV= AC_ATTR_RW,
 };
 
 struct ac_port_region_t {
     uint32_t pmpaddr;
+    uint32_t attr;
 };
 
-extern void ac_pmp_update_entry3(uint32_t);
-extern void ac_pmp_reprogram(const struct ac_port_region_t*);
+extern void ac_pmp_update_entry(unsigned i, uint32_t addr, uint32_t attr);
+extern void ac_pmp_reprogram(unsigned sz, const struct ac_port_region_t*);
 
-/*
- * Region holds precalculated content of the corresponding pmpaddrX register.
- * Zero value is a special case meaning 'region disabled'.
- */
 static inline void ac_port_region_init(
     struct ac_port_region_t* region, 
     uintptr_t addr, 
@@ -113,29 +106,25 @@ static inline void ac_port_region_init(
     unsigned int attr
 ) {
     region->pmpaddr = size ? (addr >> 2) | ((size >> 3) - 1) : 0;
+    region->attr = attr;
 }
 
-/*
- * TODO: In the current design region update may only be called for 
- * message region with fixed index 3.
- */
 static inline void ac_port_update_region(
     unsigned int i, 
     const struct ac_port_region_t* region
 ) {
-    assert(i == 3);
-    ac_pmp_update_entry3(region->pmpaddr);
+    asm volatile ("csrc mstatus, 8");
+    ac_pmp_update_entry(i, region->pmpaddr, region->attr);
+    asm volatile ("csrs mstatus, 8");
 }
 
-/*
- * TODO: Low-level asm part assumes that regions array contains 5 items.
- */
 static inline void ac_port_mpu_reprogram(
     size_t sz, 
     const struct ac_port_region_t* regions
 ) {
-    assert(sz == 5);
-    ac_pmp_reprogram(regions);
+    asm volatile ("csrc mstatus, 8");
+    ac_pmp_reprogram(sz, regions);
+    asm volatile ("csrs mstatus, 8");
 }
 
 static inline void ac_port_init(size_t size, struct ac_port_region_t* idle) {

@@ -47,13 +47,32 @@ struct ac_port_frame_t* ac_port_mtimer_handler(struct ac_port_frame_t* frame) {
     return frame;
 }
 
-struct ac_port_frame_t* ac_port_trap_handler(uint32_t mcause) {
+/*
+ * N.B. Synchronous syscalls return the same frame as input, otherwise it
+ * is assumed that the call is asynchronous and the current actor is
+ * completed.
+ */
+struct ac_port_frame_t* ac_port_trap_handler(
+    struct ac_port_frame_t* frame,
+    uint32_t mcause
+) {
+    struct ac_port_frame_t* next_frame = 0;
     mg_critical_section_leave();
-    struct ac_port_frame_t* const frame = ac_actor_exception();
-    mg_critical_section_enter();
-    ac_gpic_done(&g_pic);
 
-    return frame;
+    if (mcause == 8) {
+        frame->pc += sizeof(uint32_t);
+        next_frame = _ac_svc_handler(frame->r[REG_A0], frame);
+    } else {
+        next_frame = ac_actor_exception();
+    }
+
+    mg_critical_section_enter();
+
+    if (frame != next_frame) {
+        ac_gpic_done(&g_pic);
+    }
+
+    return next_frame;
 }
 
 /*
@@ -73,25 +92,5 @@ struct ac_port_frame_t* ac_port_msi_handler(struct ac_port_frame_t* prev) {
     }
 
     return frame;
-}
-
-/*
- * N.B. Synchronous syscalls return the same frame as input, otherwise it
- * is assumed that the call is asynchronous and the current actor is
- * completed.
- */
-struct ac_port_frame_t* ac_port_ecall_handler(
-    unsigned arg, 
-    struct ac_port_frame_t* frame
-) {
-    mg_critical_section_leave();
-    struct ac_port_frame_t* const next_frame = _ac_svc_handler(arg, frame);
-    mg_critical_section_enter();
-
-    if (frame != next_frame) {
-        ac_gpic_done(&g_pic);
-    }
-
-    return next_frame;
 }
 

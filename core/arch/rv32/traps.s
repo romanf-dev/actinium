@@ -5,16 +5,9 @@
   *  @warning This code depends on interrupt frame defined in ac_port.h!
   *****************************************************************************/
 
-.section .bss
-
-/*
- * Callee-saved registers are preserved here before the switch to U-mode.
- * Task binaries may use these registers freely.
- */
-kregs:
-.long 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-
-.section .text
+.extern ac_port_msi_handler
+.extern ac_port_mtimer_handler
+.extern ac_port_intr_handler
 
 .global ac_kernel_start
 .global ac_port_intr_entry
@@ -23,231 +16,196 @@ kregs:
 
 .set SMALL_FRAME_SZ,(18*4)
 .set FULL_FRAME_SZ,(33*4)
-.set MIE_MASK,8
+.set MSTATUS_MIE,8
+.set MIE_MSIE,8
+.set MIE_MTIE,0x80
+.set IDLE_STACK_SIZE,256
 .set STACK_ALIGN_MASK,15
-.set EXC_ID_MS,3
-.set EXC_ID_MT,7
-.set EXC_ID_EXTERNAL,11
-.set EXC_ID_ECALL,8
+
+.section .rodata
+.align 4
+
+internal_vectors:
+.word       0
+.word       0
+.word       0
+.word       ac_port_msi_handler
+.word       0
+.word       0
+.word       0
+.word       ac_port_mtimer_handler
+.word       0
+.word       0
+.word       0
+.word       ac_port_intr_handler
+
+/*
+ * Callee-saved registers are preserved here before the switch to U-mode.
+ * Task binaries may use these registers freely.
+ */
+.section .bss
+
+kregs:
+.long 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+.section .text
 
 /* 
- * N.B.
- * - mscratch holds the top of kernel stack when CPU is in U-mode and is zero
- *   in M-mode.
- * - a0/x10 may hold syscall parameter so it must not be overwritten until it
- *   is known that the current exception is not a syscall.
+ * mscratch = top of kernel stack when CPU is in U-mode and is zero in M-mode.
  */
 ac_port_intr_entry:
-    csrrw   sp, mscratch, sp 
-    bne     sp, zero, from_umode
     csrrw   sp, mscratch, sp
+    bnez    sp, from_umode          /* SP = kernel stack if prev mode is U */
+    csrrw   sp, mscratch, zero      /* switch SP back is prev mode is M */
     addi    sp, sp, -SMALL_FRAME_SZ
-from_kmode:
-    sw      x1, 2*4(sp)
-    sw      x5, 3*4(sp)
-    sw      x6, 4*4(sp)
-    sw      x7, 5*4(sp)
-    sw      x10, 6*4(sp)
-    sw      x11, 7*4(sp)
-    sw      x12, 8*4(sp)
-    sw      x13, 9*4(sp)
-    sw      x14, 10*4(sp)
-    sw      x15, 11*4(sp)
-    sw      x16, 12*4(sp)
-    sw      x17, 13*4(sp)
-    sw      x28, 14*4(sp)
-    sw      x29, 15*4(sp)
-    sw      x30, 16*4(sp)
-    sw      x31, 17*4(sp)
-    csrr    x11, mepc
-    sw      x11, 4(sp)
-    csrr    x11, mstatus
-    sw      x11, 0(sp)
-    j       done
+    j       save_frame
 from_umode:
     addi    sp, sp, -FULL_FRAME_SZ
-    sw      x3, 19*4(sp)
-    sw      x4, 20*4(sp)
-    sw      x8, 21*4(sp)
-    sw      x9, 22*4(sp)
-    sw      x18, 23*4(sp)
-    sw      x19, 24*4(sp)
-    sw      x20, 25*4(sp)
-    sw      x21, 26*4(sp)
-    sw      x22, 27*4(sp)
-    sw      x23, 28*4(sp)
-    sw      x24, 29*4(sp)
-    sw      x25, 30*4(sp)
-    sw      x26, 31*4(sp)
-    sw      x27, 32*4(sp)
-    csrrw   x8, mscratch, zero
-    sw      x8, 18*4(sp)
-    la      x27, kregs              /* load preserved kernel registers */
-    lw      x3, 0*4(x27)
-    lw      x4, 1*4(x27)
-    lw      x8, 2*4(x27)
-    lw      x9, 3*4(x27)
-    lw      x18, 4*4(x27)
-    lw      x19, 5*4(x27)
-    lw      x20, 6*4(x27)
-    lw      x21, 7*4(x27)
-    lw      x22, 8*4(x27)
-    lw      x23, 9*4(x27)
-    lw      x24, 10*4(x27)
-    lw      x25, 11*4(x27)
-    lw      x26, 12*4(x27)
-    lw      x27, 13*4(x27)
-    j       from_kmode
-done:
-    mv      a1, sp
+    sw      s11, 32*4(sp)           /* save persistent user regs on kstack */
+    sw      s10, 31*4(sp)
+    sw      s9,  30*4(sp)
+    sw      s8,  29*4(sp)
+    sw      s7,  28*4(sp)
+    sw      s6,  27*4(sp)
+    sw      s5,  26*4(sp)
+    sw      s4,  25*4(sp)
+    sw      s3,  24*4(sp)
+    sw      s2,  23*4(sp)
+    sw      s1,  22*4(sp)
+    sw      s0,  21*4(sp)
+    sw      tp,  20*4(sp)
+    sw      gp,  19*4(sp)
+    csrrw   s0, mscratch, zero      /* s0 = top of user stack */
+    sw      s0,  18*4(sp)
+    la      s11, kregs              /* load preserved kernel registers */
+    lw      gp,  0*4(s11)
+    lw      tp,  1*4(s11)
+    lw      s0,  2*4(s11)
+    lw      s1,  3*4(s11)
+    lw      s2,  4*4(s11)
+    lw      s3,  5*4(s11)
+    lw      s4,  6*4(s11)
+    lw      s5,  7*4(s11)
+    lw      s6,  8*4(s11)
+    lw      s7,  9*4(s11)
+    lw      s8,  10*4(s11)
+    lw      s9,  11*4(s11)
+    lw      s10, 12*4(s11)
+    lw      s11, 13*4(s11)
+save_frame:                         /* save volatile registers */
+    sw      t6, 17*4(sp)
+    sw      t5, 16*4(sp)
+    sw      t4, 15*4(sp)
+    sw      t3, 14*4(sp)
+    sw      a7, 13*4(sp)
+    sw      a6, 12*4(sp)
+    sw      a5, 11*4(sp)
+    sw      a4, 10*4(sp)
+    sw      a3, 9*4(sp)
+    sw      a2, 8*4(sp)
+    sw      a1, 7*4(sp)
+    sw      a0, 6*4(sp)
+    sw      t2, 5*4(sp)
+    sw      t1, 4*4(sp)
+    sw      t0, 3*4(sp)
+    sw      ra, 2*4(sp)
+    csrr    t0, mepc
+    csrr    t1, mstatus
+    sw      t0, 1*4(sp)
+    sw      t1, 0*4(sp)
     li      t0, STACK_ALIGN_MASK
     not     t0, t0
+    mv      a0, sp                  /* pointer to saved frame as 2nd arg */
     and     sp, sp, t0
+    csrr    a1, mcause
+    bgez    a1, exception
 
-                                    /* ptr to saved frame in a1 here */
-    csrr    t0, mcause
-    srli    t1, t0, 31
-    beq     t1, zero, exception
 interrupt:
-    mv      a0, a1
-    andi    t0, t0, 15
-    li      t1, EXC_ID_EXTERNAL
-    beq     t0, t1, hwintr
-    li      t1, EXC_ID_MT    
-    beq     t0, t1, mtimer
-    li      t1, EXC_ID_MS
-    beq     t0, t1, swintr
+    slli    a1, a1, 2
+    la      t0, internal_vectors
+    add     t0, t0, a1
+    lw      t0, (t0)
+    jalr    t0
+    j       context_restore
 exception:
-    li      t1, EXC_ID_ECALL      
-    beq     t0, t1, envcall
-    csrr    a0, mcause              /* the exception is not a syscall */
-    mv      s0, a1                  /* preserve the pointer to the frame */
+    mv      s0, a0                  /* preserve the ptr to the syscall frame */
     jal     ac_port_trap_handler
-    addi    sp, s0, FULL_FRAME_SZ   /* skip the saved stack frame */
-    j       context_restore
-hwintr:
-    jal     ac_port_intr_handler
-    j       context_restore
-swintr:
-    jal     ac_port_msi_handler
-    j       context_restore
-envcall:
-    mv      s0, a1                  /* preserve the ptr to the syscall frame */
-    lw      t0, 4(a1)
-    addi    t0, t0, 4               /* adjust pc to point after ecall */
-    sw      t0, 4(a1)
-    jal     ac_port_ecall_handler
-    beq     a0, s0, skip_sp_adjust
+    beq     a0, s0, context_restore
     addi    sp, s0, FULL_FRAME_SZ   /* skip the syscall frame on async call */
-skip_sp_adjust:
-    j       context_restore
-mtimer:
-    jal     ac_port_mtimer_handler
 
 context_restore:                    /* a0 points to context, MIE = 0 */
-    mv      x31, a0
-    lw      t0, 0(x31)
-    csrw    mstatus, t0
-    lw      t0, 4(x31)
+    lw      t6, 17*4(a0)            /* load volatile registers except a0/t0 */
+    lw      t5, 16*4(a0)
+    lw      t4, 15*4(a0)
+    lw      t3, 14*4(a0)
+    lw      a7, 13*4(a0)
+    lw      a6, 12*4(a0)
+    lw      a5, 11*4(a0)
+    lw      a4, 10*4(a0)
+    lw      a3, 9*4(a0)
+    lw      a2, 8*4(a0)
+    lw      a1, 7*4(a0)
+    lw      t2, 5*4(a0)
+    lw      t1, 4*4(a0)
+    lw      ra, 2*4(a0)
+    lw      t0, 1*4(a0)
     csrw    mepc, t0
-    lw      x1, 2*4(x31)
-    lw      x5, 3*4(x31)
-    lw      x6, 4*4(x31)
-    lw      x7, 5*4(x31)
-    lw      x10, 6*4(x31)
-    lw      x11, 7*4(x31)
-    lw      x12, 8*4(x31)
-    lw      x13, 9*4(x31)
-    lw      x14, 10*4(x31)
-    lw      x15, 11*4(x31)
-    lw      x16, 12*4(x31)
-    lw      x17, 13*4(x31)
-    lw      x28, 14*4(x31)
-    lw      x29, 15*4(x31)
-    csrr    x30, mstatus
-    srli    x30, x30, 11            /* MPP offset */
-    andi    x30, x30, 3             /* MPP mask */
-    beq     x30, zero, to_umode
-    mv      sp, x31
-    lw      x30, 16*4(sp)
-    lw      x31, 17*4(sp)
+    lw      t0, 0*4(a0)
+    csrw    mstatus, t0
+    srli    t0, t0, 11              /* MPP offset */
+    andi    t0, t0, 3               /* MPP mask */
+    beqz    t0, to_umode
+    mv      sp, a0                  /* load a0/t0 using sp */
+    lw      t0, 3*4(sp)
+    lw      a0, 6*4(sp)
     addi    sp, sp, SMALL_FRAME_SZ
     mret
 to_umode:
-    csrw    mscratch, sp
-    mv      sp, x31
-    la      x31, kregs              /* preserve kernel regs using x30-31 */
-    sw      x3, 0*4(x31)
-    sw      x4, 1*4(x31)
-    sw      x8, 2*4(x31)
-    sw      x9, 3*4(x31)
-    sw      x18, 4*4(x31)
-    sw      x19, 5*4(x31)
-    sw      x20, 6*4(x31)
-    sw      x21, 7*4(x31)
-    sw      x22, 8*4(x31)
-    sw      x23, 9*4(x31)
-    sw      x24, 10*4(x31)
-    sw      x25, 11*4(x31)
-    sw      x26, 12*4(x31)
-    sw      x27, 13*4(x31)
-    lw      x3, 19*4(sp)            /* 'large' frame part */
-    lw      x4, 20*4(sp)
-    lw      x8, 21*4(sp)
-    lw      x9, 22*4(sp)
-    lw      x18, 23*4(sp)
-    lw      x19, 24*4(sp)
-    lw      x20, 25*4(sp)
-    lw      x21, 26*4(sp)
-    lw      x22, 27*4(sp)
-    lw      x23, 28*4(sp)
-    lw      x24, 29*4(sp)
-    lw      x25, 30*4(sp)
-    lw      x26, 31*4(sp)
-    lw      x27, 32*4(sp)
-    lw      x30, 16*4(sp)
-    lw      x31, 17*4(sp)
-    lw      sp, 18*4(sp)
+    csrw    mscratch, sp            /* save top of kernel stack to mscratch */
+    mv      sp, a0
+    la      a0, kregs               /* preserve kernel regs using x30-31 */
+    sw      gp,  0*4(a0)
+    sw      tp,  1*4(a0)
+    sw      s0,  2*4(a0)
+    sw      s1,  3*4(a0)
+    sw      s2,  4*4(a0)
+    sw      s3,  5*4(a0)
+    sw      s4,  6*4(a0)
+    sw      s5,  7*4(a0)
+    sw      s6,  8*4(a0)
+    sw      s7,  9*4(a0)
+    sw      s8,  10*4(a0)
+    sw      s9,  11*4(a0)
+    sw      s10, 12*4(a0)
+    sw      s11, 13*4(a0)
+    lw      t0,  3*4(sp)            /* load scratch registers a0/t0 */
+    lw      a0,  6*4(sp)
+    lw      s11, 32*4(sp)           /* load user's persistent regs */
+    lw      s10, 31*4(sp)
+    lw      s9,  30*4(sp)
+    lw      s8,  29*4(sp)
+    lw      s7,  28*4(sp)
+    lw      s6,  27*4(sp)
+    lw      s5,  26*4(sp)
+    lw      s4,  25*4(sp)
+    lw      s3,  24*4(sp)
+    lw      s2,  23*4(sp)
+    lw      s1,  22*4(sp)
+    lw      s0,  21*4(sp)
+    lw      tp,  20*4(sp)
+    lw      gp,  19*4(sp)           
+    lw      sp,  18*4(sp)           /* SP is updated using SP, last op */
     mret
 
 ac_kernel_start:
-    csrc    mstatus, MIE_MASK
-    csrs    mie, 8              /* enable machine sw interrupts */
-    csrr    a0, mie
-    or      a0, a0, 0x80        /* enable machine timer interrupts */
-    csrw    mie, a0
-    li      t0, 0x1b1b1b1d      /* 1b = NAPOT region RW, 1d = NAPOT + RX */
-    csrw    pmpcfg0, t0
-    li      t0, 0x1b
-    csrw    pmpcfg1, t0
-    la      t0, _estack
-    mv      sp, t0
-    addi    sp, sp, -256
-    csrs    mstatus, MIE_MASK
+    csrc    mstatus, MSTATUS_MIE
+    csrs    mie, MIE_MSIE           /* enable machine sw interrupts */
+    li      t0, MIE_MTIE
+    csrs    mie, t0                 /* enable machine timer interrupts */
+    la      sp, _estack
+    addi    sp, sp, -IDLE_STACK_SIZE
+    csrs    mstatus, MSTATUS_MIE
 wait:    
     wfi
     j       wait
-
-ac_pmp_update_entry3:
-    bne     a0, zero, update
-    csrr    a0, pmpaddr2
-update:
-    csrw    pmpaddr3, a0
-    ret
-
-ac_pmp_reprogram:
-    lw      a1, 0(a0)
-    csrw    pmpaddr0, a1
-    lw      a1, 4(a0)
-    csrw    pmpaddr1, a1
-    lw      t0, 8(a0)
-    csrw    pmpaddr2, t0
-    lw      a1, 12(a0)
-    bne     a1, zero, update_msg
-    mv      a1, t0
-update_msg:
-    csrw    pmpaddr3, a1
-    lw      a1, 16(a0)
-    csrw    pmpaddr4, a1
-    ret
 
