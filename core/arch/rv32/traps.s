@@ -7,18 +7,14 @@
 
 .extern ac_port_msi_handler
 .extern ac_port_mtimer_handler
-.extern ac_port_intr_handler
+.extern ac_port_mei_handler
 
 .global ac_kernel_start
 .global ac_port_intr_entry
-.global ac_pmp_update_entry3
-.global ac_pmp_reprogram
 
 .set SMALL_FRAME_SZ,(18*4)
 .set FULL_FRAME_SZ,(33*4)
 .set MSTATUS_MIE,8
-.set MIE_MSIE,8
-.set MIE_MTIE,0x80
 .set IDLE_STACK_SIZE,256
 .set STACK_ALIGN_MASK,15
 
@@ -37,7 +33,7 @@ internal_vectors:
 .word       0
 .word       0
 .word       0
-.word       ac_port_intr_handler
+.word       ac_port_mei_handler
 
 /*
  * Callee-saved registers are preserved here before the switch to U-mode.
@@ -198,10 +194,6 @@ to_umode:
     mret
 
 ac_kernel_start:
-    csrc    mstatus, MSTATUS_MIE
-    csrs    mie, MIE_MSIE           /* enable machine sw interrupts */
-    li      t0, MIE_MTIE
-    csrs    mie, t0                 /* enable machine timer interrupts */
     la      sp, _estack
     addi    sp, sp, -IDLE_STACK_SIZE
     csrs    mstatus, MSTATUS_MIE
