@@ -6,36 +6,45 @@
   *  
   *  Design description:
   *  This is a pure software implementation compatible with any interrupt
-  *  controller. The module maintains 31 'vectors' available for actor execution.
+  *  controller. The module maintains 32 'vectors' available for actor execution.
   *  These vectors are represented as three dwords: masked, pending, active.
   *  A single IRQ is used as a workhorse for the preemption: 
   *  whenever there is unmasked vector (e.g. by set_pending) the MSIP is set 
   *  and machine software interrupt is triggered. Pending bits are reset upon 
   *  entering sw interrupt handler. Within handler processing vectors with
   *  lower priority remain masked so the actor cannot preempt itself.
-  *  For simplicity, priority 0 is reserved because software implementation of
-  *  log2 function return identical values for 0 and 1 argument.
   *****************************************************************************/
 
 #ifndef AC_GPIC_H
 #define AC_GPIC_H
 
-#include "mg_port.h"
+#include <stdint.h>
 
 extern void ac_gpic_req_set(unsigned int bit);
 
 typedef uint32_t ac_gpic_mask_t;
 
 enum {
+#ifdef NO_CLZ
+    AC_GPIC_PRIO_MAX = 3,
+#else
     AC_GPIC_PRIO_MAX = 31,
-    AC_GPIC_PRIO_MIN = 1,
+#endif
+    AC_GPIC_PRIO_MIN = 0,
 };
 
-/*
- * N.B. v must be nonzero.
- */
+static unsigned int clz(unsigned int val) {
+#ifdef NO_CLZ
+    assert(val < 16);
+    unsigned int leading_zeros = ((0x55afu >> (val << 1)) & 3) + !val + 28;
+#else
+    unsigned int leading_zeros = __builtin_clz(val);
+#endif
+    return leading_zeros;
+}
+
 static inline unsigned int lg2(uint32_t v) {
-    return 31 - mg_port_clz(v);
+    return 31 - clz(v);
 }
 
 /*
