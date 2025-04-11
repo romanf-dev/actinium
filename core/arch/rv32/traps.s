@@ -12,11 +12,9 @@
 .global ac_kernel_start
 .global ac_port_intr_entry
 
-.set SMALL_FRAME_SZ,(18*4)
-.set FULL_FRAME_SZ,(33*4)
+.set FRAME_SZ,144
 .set MSTATUS_MIE,8
 .set IDLE_STACK_SIZE,256
-.set STACK_ALIGN_MASK,15
 
 .section .rodata
 .align 4
@@ -45,6 +43,7 @@ kregs:
 .long 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 
 .section .text
+.align 4
 
 /* 
  * mscratch = top of kernel stack when CPU is in U-mode and is zero in M-mode.
@@ -53,10 +52,10 @@ ac_port_intr_entry:
     csrrw   sp, mscratch, sp
     bnez    sp, from_umode          /* SP = kernel stack if prev mode is U */
     csrrw   sp, mscratch, zero      /* switch SP back is prev mode is M */
-    addi    sp, sp, -SMALL_FRAME_SZ
+    addi    sp, sp, -FRAME_SZ
     j       save_frame
 from_umode:
-    addi    sp, sp, -FULL_FRAME_SZ
+    addi    sp, sp, -FRAME_SZ
     sw      s11, 32*4(sp)           /* save persistent user regs on kstack */
     sw      s10, 31*4(sp)
     sw      s9,  30*4(sp)
@@ -73,8 +72,11 @@ from_umode:
     sw      gp,  19*4(sp)
     csrrw   s0, mscratch, zero      /* s0 = top of user stack */
     sw      s0,  18*4(sp)
+.option push
+.option norelax
     la      s11, kregs              /* load preserved kernel registers */
     lw      gp,  0*4(s11)
+.option pop
     lw      tp,  1*4(s11)
     lw      s0,  2*4(s11)
     lw      s1,  3*4(s11)
@@ -109,10 +111,7 @@ save_frame:                         /* save volatile registers */
     csrr    t1, mstatus
     sw      t0, 1*4(sp)
     sw      t1, 0*4(sp)
-    li      t0, STACK_ALIGN_MASK
-    not     t0, t0
-    mv      a0, sp                  /* pointer to saved frame as 2nd arg */
-    and     sp, sp, t0
+    mv      a0, sp                  /* pointer to the saved frame as 1st arg */
     csrr    a1, mcause
     bgez    a1, exception
 
@@ -127,7 +126,7 @@ exception:
     mv      s0, a0                  /* preserve the ptr to the syscall frame */
     jal     ac_port_trap_handler
     beq     a0, s0, context_restore
-    addi    sp, s0, FULL_FRAME_SZ   /* skip the syscall frame on async call */
+    addi    sp, s0, FRAME_SZ        /* skip the syscall frame on async call */
 
 context_restore:                    /* a0 points to context, MIE = 0 */
     lw      t6, 17*4(a0)            /* load volatile registers except a0/t0 */
@@ -154,7 +153,7 @@ context_restore:                    /* a0 points to context, MIE = 0 */
     mv      sp, a0                  /* load a0/t0 using sp */
     lw      t0, 3*4(sp)
     lw      a0, 6*4(sp)
-    addi    sp, sp, SMALL_FRAME_SZ
+    addi    sp, sp, FRAME_SZ
     mret
 to_umode:
     csrw    mscratch, sp            /* save top of kernel stack to mscratch */

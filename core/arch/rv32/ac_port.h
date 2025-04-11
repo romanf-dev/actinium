@@ -60,6 +60,7 @@ struct ac_port_frame_t {
     uint32_t mstatus;
     uint32_t pc;
     uint32_t r[31];
+    uint32_t padding[3];    /* for stack alignment */
 };
 
 static inline struct ac_port_frame_t* ac_port_frame_alloc(
@@ -82,12 +83,12 @@ static inline void ac_port_frame_set_arg(
 }
 
 static inline void ac_port_level_mask(unsigned int level) {
-    /* unused */
+    (void) level;
 }
 
 enum {
     AC_ATTR_RO = 0x1d,
-    AC_ATTR_RW = 0x1b,
+    AC_ATTR_RW = 0x1f,  /* on RP2350 X and R bits are transposed */
     AC_ATTR_DEV= AC_ATTR_RW,
 };
 
@@ -128,7 +129,8 @@ static inline void ac_port_mpu_reprogram(
 }
 
 static inline void ac_port_init(size_t size, struct ac_port_region_t* idle) {
-    /* unused */
+    (void) size;
+    (void) idle;
 }
 
 #endif
