@@ -63,7 +63,7 @@ struct ac_actor_t {
     } msg;
 };
 
-struct ac_context_t {
+struct ac_cpu_context_t {
     struct ac_actor_t* running_actor;
     struct ac_port_region_t granted[AC_REGIONS_NUM];
 
@@ -78,6 +78,10 @@ struct ac_context_t {
     } stacks[MG_PRIO_MAX];
 };
 
+struct ac_context_t {
+    struct ac_cpu_context_t per_cpu_data[MG_CPU_MAX];
+};
+
 struct ac_channel_t {
     struct mg_message_pool_t base;
     int msg_type; /* Unique id of the message type. */
@@ -89,7 +93,7 @@ _Static_assert(offsetof(struct ac_channel_t, base) == 0, "non 1st member");
 _Static_assert(AC_REGION_STACK == 2, "asm part depends on stack region index");
 _Static_assert(sizeof(struct ac_message_t) == sizeof(uintptr_t) * 4, "pad");
 
-extern void noreturn ac_kernel_start(void);
+extern noreturn void ac_kernel_start(void);
 extern void* ac_intr_handler(uint32_t vect, void* frame);
 extern void* ac_svc_handler(uint32_t arg, void* frame);
 extern void* ac_trap_handler(uint32_t exception_id);
@@ -101,12 +105,14 @@ extern struct ac_channel_t* ac_channel_validate(
 );
 
 extern struct ac_context_t g_ac_context;
-#define AC_GET_CONTEXT() (&g_ac_context)
+#define AC_GET_CONTEXT() (&(g_ac_context.per_cpu_data[mg_cpu_this()]))
 
 static inline void ac_context_init(void) {
-    struct ac_context_t* const context = AC_GET_CONTEXT();
     mg_context_init();
-    ac_port_init(AC_REGIONS_NUM, context->granted);
+    for (unsigned i = 0; i < MG_CPU_MAX; ++i) {
+        struct ac_cpu_context_t* const context = &(g_ac_context.per_cpu_data[i]);
+        ac_port_init(AC_REGIONS_NUM, context->granted);
+    }
 }
 
 static inline void ac_context_tick(void) {
@@ -114,7 +120,7 @@ static inline void ac_context_tick(void) {
 }
 
 static inline void ac_context_stack_set(unsigned prio, size_t sz, void* ptr) {
-    struct ac_context_t* const context = AC_GET_CONTEXT();
+    struct ac_cpu_context_t* const context = AC_GET_CONTEXT();
 
     assert((sz & (sz - 1)) == 0);
     assert(sz > sizeof(struct ac_port_frame_t));
@@ -214,7 +220,7 @@ static inline void ac_actor_init(
     actor->msg.size = 0;
     actor->msg.type = 0;
 
-    struct ac_context_t* const context = AC_GET_CONTEXT();
+    struct ac_cpu_context_t* const context = AC_GET_CONTEXT();
 
     ac_port_region_init(
         &regions[AC_REGION_FLASH], 
@@ -256,7 +262,7 @@ static inline void ac_actor_allow(
 static inline struct ac_port_frame_t* _ac_frame_create(
     struct ac_actor_t* actor
 ) {
-    const struct ac_context_t* const context = AC_GET_CONTEXT();
+    const struct ac_cpu_context_t* const context = AC_GET_CONTEXT();
     const unsigned int prio = actor->base.prio;
     const uintptr_t base = context->stacks[prio].addr;
     const size_t size = context->stacks[prio].size;
@@ -272,7 +278,7 @@ static inline struct ac_port_frame_t* _ac_intr_handler(
     uint32_t vect, 
     struct ac_port_frame_t* prev_frame
 ) {
-    struct ac_context_t* const context = AC_GET_CONTEXT();
+    struct ac_cpu_context_t* const context = AC_GET_CONTEXT();
     struct ac_port_frame_t* frame = prev_frame;
 
     for (;;) {
@@ -309,7 +315,7 @@ static inline struct ac_port_frame_t* _ac_intr_handler(
 }
 
 static inline struct ac_port_frame_t* _ac_frame_restore_prev(void) {
-    struct ac_context_t* const context = AC_GET_CONTEXT();
+    struct ac_cpu_context_t* const context = AC_GET_CONTEXT();
     struct ac_actor_t* const me = context->running_actor;
     const unsigned int my_prio = me->base.prio;
     struct ac_actor_t* const prev = context->preempted[my_prio].actor;
@@ -337,7 +343,7 @@ static inline void ac_actor_restart(struct ac_actor_t* actor) {
 }
 
 static inline struct ac_port_frame_t* ac_actor_exception(void) {
-    struct ac_context_t* const context = AC_GET_CONTEXT();
+    struct ac_cpu_context_t* const context = AC_GET_CONTEXT();
     struct ac_actor_t* const me = context->running_actor;
     assert(me != 0);
     _ac_message_release(me, true);
@@ -403,7 +409,7 @@ static inline struct ac_port_frame_t* _ac_svc_handler(
     uint32_t syscall, 
     struct ac_port_frame_t* prev_frame
 ) {
-    const struct ac_context_t* const context = AC_GET_CONTEXT();    
+    const struct ac_cpu_context_t* const context = AC_GET_CONTEXT();    
     struct ac_actor_t* const actor = context->running_actor;
     struct ac_port_frame_t* frame = prev_frame;
     const uint32_t opcode = syscall >> 28;
