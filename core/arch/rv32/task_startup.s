@@ -5,6 +5,7 @@
   *****************************************************************************/
 
 .section .startup
+.align 4
 
 startup:
     mv      t0, ra
@@ -35,6 +36,7 @@ task_run:
     j       task_run
 
 .section .text
+.align 4
 
 .global _ac_syscall
 _ac_syscall:
