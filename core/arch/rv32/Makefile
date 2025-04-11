@@ -1,7 +1,7 @@
 
 .PHONY: clean all
 
-GCC_PREFIX ?= riscv-none-elf-
+GCC_PREFIX ?= riscv32-unknown-elf-
 
 %.o : %.s
 	$(GCC_PREFIX)gcc -march=rv32izicsr -c -o $@ $<
