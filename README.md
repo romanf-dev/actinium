@@ -31,21 +31,21 @@ Design principles
     run-to-completion routines. Modern languages allow to implement actors
     that look and behave as threads but need less resources. Finally, actors
     simplify real-time analysis.
-3.  **Hardware-assisted scheduling.**
+2.  **Hardware-assisted scheduling.**
     Modern interrupt controllers implement prioritized actor model in 
     hardware. Actor's priorities are mapped to interrupt priorities, thus
     scheduling and preemption operations are effectively implemented by
     the interrupt controller. It boosts performance and reduces code size.
-4.  **Memory protection.**
+3.  **Memory protection.**
     Actinium is designed for embedded systems with reliability requirements.
     Each actor is compiled as separate binary executable and isolated within 
     memory regions using MPU (memory protection unit). Actor's crash may not
     cause the whole system to fail.
-5.  **Zero-copy message-passing communication.**
+4.  **Zero-copy message-passing communication.**
     Actors communicate using messages and channels. However, messages are
     always passed by reference, so sending 1Kb and 1Gb message takes exactly
     the same time. Message passing is the only communication method at now.
-6.  **Fault-tolerance and 'let it crash' principle.**
+5.  **Fault-tolerance and 'let it crash' principle.**
     When the framework encounters crash condition, e.g. invalid memory 
     reference, wrong syscall number, exception, etc. the erronous actor 
     is automatically marked for restart. Clients and servers may not
