@@ -154,6 +154,7 @@ int main(void) {
     NVIC_EnableIRQ(0);
     NVIC_EnableIRQ(1);
     NVIC_SetPriority(SysTick_IRQn, 1);
+    NVIC_SetPriority(SVCall_IRQn, 1);
 
     /* 
      * Create the 'controller' actor and allow to access GPIOC.
