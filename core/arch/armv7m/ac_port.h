@@ -11,10 +11,6 @@
   *  - Priority levels 0 and 1 are reserved for exceptions and the tick 
   *    respectively. These priorities must not be used for actors.
   *  - Idle procedure uses the top ot interrupt stack to hold the context.
-  *  - The external program must define _estack. _sflash, and _eflash symbols
-  *    holding addresses of top of interrupt stack, flash base and (flash base +
-  *    flash size) respectively. Flash size in current design must be power of 2
-  *    sized.
   *  - Exception return procedure acts as a barrier for MPU reprogramming so
   *    no need for explicit DSB/ISB here.
   *****************************************************************************/
@@ -132,23 +128,33 @@ static inline void ac_port_mpu_reprogram(
     mg_critical_section_leave();
 }
 
+/*
+ * The kernel sets CONTROL reg just once so code of 'idle' is also subjected
+ * to MPU restrictions. This code sets up minimal MPU regions required for 
+ * idle execution. The asm part defines the special symbol pointing to the 
+ * code of the idle function. By convention the code is aligned to 64. Idle 
+ * stack is derived from the current SP and should be large enough to hold the 
+ * full context (64 bytes). The asm part reads SP directly from the MPU 
+ * before the idle loop is started. It is expected that this code is called
+ * within the main() so SP is near to its initial value.
+ */
 static inline void ac_port_init(
     size_t sz, 
     struct ac_port_region_t regions[static sz]
 ) {
-    extern const uint8_t _estack;
-    extern const uint8_t _sflash;
-    extern const uint8_t _eflash;
+    extern const uint8_t ac_port_idle_text;
+    const uintptr_t ro_base = (uintptr_t)&ac_port_idle_text;
     const size_t full_context_sz = 64;
-    const uintptr_t stack = (uintptr_t)&_estack - full_context_sz;
-    const uintptr_t ro_base = (uintptr_t)&_sflash;
-    const uintptr_t ro_end = (uintptr_t)&_eflash;
-    const size_t ro_size = ro_end - ro_base;
+    uintptr_t stack;
 
-    ac_port_region_init(&regions[0], ro_base, ro_size, AC_ATTR_RO);
+    asm volatile ("mov %0, sp" : "=r" (stack));
+    stack &= ~(full_context_sz - 1);
+    stack -= full_context_sz;
+
+    ac_port_region_init(&regions[0], ro_base, 64, AC_ATTR_RO);
     ac_port_region_init(&regions[2], stack, full_context_sz, AC_ATTR_RW);
     ac_port_mpu_reprogram(sz, regions);
-    ac_port_level_mask(1); /* blocks any user actor */
+    ac_port_level_mask(2); /* blocks any user actor */
 }
 
 #endif

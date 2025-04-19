@@ -10,166 +10,125 @@
 .fpu softvfp
 .thumb
 
-.section .bss
-
-/*
- * Since tasks are separate binaries they may or may not be AAPCS-compliant, so
- * we need to preserve kernel's high registers every time when we cross usermode
- * boundary. This is storage for that purpose.
- * Another issue is task's high registers. In principle each task may use them 
- * by its own way, and we cannot just push them each time on the stack (as 
- * regular RTOS do) since we can't trust user stack pointer.
- * Our strategy here is to read stack region address (set by trusted kernel)
- * directly from MPU and use the stack to save registers.
- * And yet more complexity: stacks are reused by different tasks, how can we 
- * store context there? The solution is that stacks are reused by tasks with
- * the same priority. Our stack will not be broken by another task until we
- * request blocking syscall. But blocking syscall means that task's function
- * is already returned so any registers are not needed anymore.
- */
-
-hiregs:
-.word 0,0,0,0,0,0,0,0
-
-/*
- * When CPU's R4-R11 is loaded with kernel ones this field is 0. Otherwise it
- * points to task's stack when registers may be stored. So, if this field is
- * nonzero then 'hiregs' buffer contains valid kernel registers.
- */
-
-target:
-.word 0
-
-.section .text
+.set SHCSR,0xe000ed24
+.set MPU_RNR,0xe000ed98
 
 .global ac_kernel_start
 .global ac_port_intr_entry
 .global ac_port_svc_entry
 .global ac_port_trap_entry
+.global ac_port_idle_text
+
+.section .text
 
 /*
  * Interrupts may interrupt anything, so both cases must be covered:
  * interruption of privileged and unprivileged code.
+ * The interrupt frame is splitted into two parts which are saved to
+ * different stacks. Hardware-supplied frame is always pushed into the
+ * current stack (PSP), but saving high registers into the same location
+ * is unreliable as we cannot trust user stack pointer so the rest of the
+ * frame is pushed into MSP. As handlers are always stacked this is not an
+ * issue but requires some care in the low-level code.
+ * LSB of the frame pointer is also used as a flag indicating return mode:
+ * 0 - usermode frame, 1 - kernel-mode frame. This bit is also selects
+ * the appropriate stack pointer on return either MSP or PSP.
  */
 
 .type ac_port_intr_entry, %function
 ac_port_intr_entry:
-    mrs     r0, psp
-    tst     lr, #4
-    ite     eq              // Use SP or PSP as frame pointer depending on LR.
-    addeq   r1, sp, #1
-    movne   r1, r0
-    ldr     r0, =target
-    ldr     r2, =hiregs
-    cpsid   i
-    ldr     r3, [r0]        // Load target and preserve it in R12.
-    mov     r12, r3
-    teq     r3, #0
-    itttt   ne              // Switch high registers if needed.
-    stmiane r3, { r4-r11 }
-    ldmiane r2, { r4-r11 }
-    movne   r3, #0          // Set target = 0.
-    strne   r3, [r0]
-    cpsie   i
+    stmdb   sp!, { r4-r11 } // Save callee-saved registers on MSP always.
+    mrs     r0, psp         // MRS can't be in IT block, read for further use.
+    tst     lr, #4          // Is usermode interrupted?
+    ite     eq              //
+    addeq   r1, sp, #1      // No, get the frame ptr from MSP plus mode flag.
+    movne   r1, r0          // Yes, frame in previously read PSP.
     mrs     r0, ipsr        // Provide 1st argument, vector number.
-    subs    r0, r0, #16
-    bl      ac_intr_handler
-    b       exc_return      // R12 is preserved so we'll restore hiregs later.
+    subs    r0, #16         // Get interrupt vector by exception id.
+    movs    r4, r1          // Preserve the frame ptr in callee-saved reg.
+    bl      ac_intr_handler // Get the next frame in R0.
+    cmp     r0, r4          // Is new frame allocated?
+    it      ne
+    subsne  sp, #32         // Yes, simulate STMDB with high regs.
+    b       exc_return
 
 /*
  * In the current design there is (very optimistic) assumption that exceptions
  * may only be thrown from usermode.
+ * Since it is possible that multiple exceptions are pending they are cleared
+ * to prevent exceptions to occur in the next actor.
+ * The high part of the frame is not saved and it is expected that the handler
+ * will return the next stacked frame that matches the high regs which are
+ * already on the stack.
  */
 
 .type ac_port_trap_entry, %function
 ac_port_trap_entry:
-    ldr     r0, =0xe000ed24 // Address of SHCSR.
+    ldr     r0, =SHCSR
     ldr     r1, [r0]
-    bfc     r1, #12, #3
+    bfc     r1, #12, #4
     str     r1, [r0]
-    mrs     r1, psp
-    ldr     r0, =target
-    ldr     r2, =hiregs
-    cpsid   i               // Switch hiregs if needed.
-    ldr     r3, [r0]        
-    ldmia   r2, { r4-r11 }
-    mov     r3, #0          // Set target = 0.
-    str     r3, [r0]
-    cpsie   i
+    dsb
+    isb
     mrs     r0, ipsr
     bl      ac_trap_handler
     b       exc_return
 
+/*
+ * Syscall handler. Syscalls are allowed from usermode only so no need to 
+ * check the LR. If the handler returns the same frame is its input it
+ * means that this call is synchronous.
+ * Syscall exception must have priority less than other faults so they
+ * will take priority in case of errors during the stacking.
+ */
+
 .type ac_port_svc_entry, %function
 ac_port_svc_entry:
     tst     lr, #4          // First call from main is a special case.
-    bne     syscall         // It is used to enable unprivileged threads.
+    beq     enable_umode    // It is used to enable unprivileged threads.
+    stmdb   sp!, { r4-r11 } // Save high registers on the MSP stack.
+    mrs     r1, psp         // Read the frame pointer.
+    ldr     r0, [r1]        // Read syscall argument in r0 from the frame.
+    movs    r4, r1          // Preserve the frame ptr in callee-saved reg. 
+    bl      ac_svc_handler  // Get the next frame.
+    cmp     r0, r4          // Is this call is synchronous (same frame)?
+    it      ne
+    addsne  sp, #32         // No, skip high registers pushed by STMDB.
+    b       exc_return    
+
+/*
+ * We came here with R0 pointing to the stack frame. The high registers
+ * for the next actor are already on to of the MSP.
+ */
+
+exc_return:
+    mvn     lr, #14         // 0xfffffff1 = return to handler. Adjusted later.
+    mrs     r1, psp         // Pre-read PSP as mrs isn't allows in IT block.
+    tst     r0, #1          // Return to handler mode?
+    ittee   ne
+    bicne   r0, #1          // Yes, reset the flag and obtain the next MSP.
+    movne   sp, r0          // Set the MSP.
+    moveq   r1, r0          // No, return to thread, overwrite PSP in r1.
+    orreq   lr, #12         // LR = 0xfffffffd, 'return to thread using PSP'.
+    msr     psp, r1         // Update the PSP.
+    ldmia   sp!, { r4-r11 } // Load the high registers of the next actor.
+    bx      lr              // Unstacking.
+
+/*
+ * Called just once from the idle thread.
+ */
+
+enable_umode:
     mov     r0, sp          // SP is MSP and points to pushed hw frame here.
     msr     psp, r0         // Set PSP for return.
-    sub     r0, #32         // Make room for idle-task's hiregs on top of
-    mov     sp, r0          // interrupt stack. MSP points just below idle's
-    mov     r0, #0          // stack.
+    movs    r0, #0
     msr     basepri, r0
-    mov     r0, #3
+    movs    r0, #3
     msr     control, r0
-    orr     lr, lr, #4
+    orr     lr, #4
     dsb
     isb
     bx lr
-syscall:
-    ldr     r1, =0xe000ed24 // Address of SHCSR.
-    ldr     r2, [r1]
-    lsr     r3, r2, #12
-    tst     r3, #7
-    ittt    ne
-    bfcne   r2, #12, #3
-    strne   r2, [r1]
-    ldrne   r0, =0xffffffff
-    ldr     r1, =target     // Syscalls are always from usermode, no need
-    ldr     r2, =hiregs     // to check LR.
-    ldr     r3, [r1]
-    cpsid   i               // Switch hiregs unconditionally.
-    stmia   r3, { r4-r11 }
-    ldmia   r2, { r4-r11 }
-    mov     r3, #0
-    str     r3, [r1]
-    cpsie   i
-    mrs     r1, psp
-    ldr     r0, [r1]        // pushed registers are in unknown state in armv7
-    bl      ac_svc_handler
-
-/*
- * The most complex part. We came here with R0 pointing to the stack frame.
- * bit 0 value is 0 if the target mode is unprivileged and 1 otherwise.
- */
-exc_return:
-    ldr     lr, =0xFFFFFFF1 // Return to handler. Will be adjusted later.
-    mrs     r1, psp
-    tst     r0, #1
-    ittee   ne              // Set either MSP or PSP.
-    bicne   r0, r0, #1
-    movne   sp, r0
-    moveq   r1, r0
-    orreq   lr, lr, #12     // LR = 0xfffffffd, 'return to thread using PSP'.
-    msr     psp, r1
-    mov     r1, #2          // Stack region number in the MPU.
-    mov     r2, r12         // Possibly preserved target.
-    tst     lr, #4
-    itttt   ne
-    ldrne   r3, =0xe000ed98 // Read base addr of region 2 if return to thread.
-    strne   r1, [r3, #0]    // Set RNR.
-    ldrne   r2, [r3, #4]    // Read RBAR.
-    bicne   r2, #15         // Reset region number bits.
-    ldr     r0, =hiregs
-    ldr     r1, =target
-    cpsid   i
-    teq     r2, #0          // R2 would be nonzero if either return to thread 
-    ittt    ne              // or preserved R12 is nonzero.
-    stmiane r0, { r4-r11 }
-    strne   r2, [r1]
-    ldmiane r2, { r4-r11 }
-    cpsie   i               // Another interrupts may happen here!
-    bx      lr
 
 /*
  * Called from main while still in privileged mode on MSP stack.
@@ -177,12 +136,26 @@ exc_return:
  * mask before enabling usermode. But after usermode is enabled via control
  * reg we will lose access to system registers including basepri.
  * This is the reason why we need svc here and the special case.
+ *
+ * +----------------------+ <-- initial idle's stack top before SVC
+ * | stacked idle's frame |
+ * +----------------------+ <-- pointer to stacked frame inside SVC handler
+ * | kernel-mode stack    |     this is also the low MPU boundary for the 
+ * +----------------------+     idle stack and the top of the kernel stack
+ *            V             <-- kernel stack grow direction
  */
 
+.balign 64
+ac_port_idle_text:
 .type ac_kernel_start, %function
 ac_kernel_start:
-    ldr     r0, =_estack
-    mov     sp, r0
+    ldr     r0, =MPU_RNR
+    movs    r1, #2          // Read base addr of region 2 (stack).
+    str     r1, [r0, #0]    // Set RNR.
+    ldr     r1, [r0, #4]    // Read RBAR.
+    bic     r1, #15         // Reset region number bits.
+    adds    r1, #32         // Add frame size = top of stack.
+    mov     sp, r1
     svc     0
     b       .
 
