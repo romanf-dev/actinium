@@ -108,11 +108,12 @@ extern struct ac_context_t g_ac_context;
 #define AC_GET_CONTEXT() (&(g_ac_context.per_cpu_data[mg_cpu_this()]))
 
 static inline void ac_context_init(void) {
-    mg_context_init();
-    for (unsigned i = 0; i < MG_CPU_MAX; ++i) {
-        struct ac_cpu_context_t* const context = &(g_ac_context.per_cpu_data[i]);
-        ac_port_init(AC_REGIONS_NUM, context->granted);
+    if (mg_cpu_this() == 0) {
+        mg_context_init();
     }
+
+    struct ac_cpu_context_t* const context = AC_GET_CONTEXT();
+    ac_port_init(AC_REGIONS_NUM, context->granted);
 }
 
 static inline void ac_context_tick(void) {
