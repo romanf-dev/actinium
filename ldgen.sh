@@ -47,7 +47,7 @@ echo Kernel code size = $ktext_sz, kernel data size = $ksram_sz.
 echo "Preparing apps..."
 apps_num=0
 header_size=0
-for f in *.o; do
+for f in *.task; do
     echo "Processing of $f object file as slot $apps_num..."
     $prefix"objcopy" --prefix-symbols task$apps_num $f $f.pfx
     ((apps_num++))
@@ -76,7 +76,7 @@ echo -e "\t.bss : {\n\t\tkernel.0(.bss*)\n\t\tkernel.0(COMMON)\n\t} > KRAM\n" >>
 ((sram_base += ksram_sz))
 
 counter=0
-for f in *.o; do
+for f in *.task; do
     text_raw_sz=$(section_sz $prefix $f .text);
     data_raw_sz=$(section_sz $prefix $f .data);
     sram_raw_sz=$(section_sz $prefix $f .bss);

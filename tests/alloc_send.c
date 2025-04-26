@@ -9,7 +9,7 @@
 #include <setjmp.h>
 #include <assert.h>
 #include "ac_core.h"           /* kernel API */
-#include "c_task/actinium.h"   /* user API */
+#include "usr/c/actinium.h"   /* user API */
 
 struct mg_context_t g_mg_context;
 struct ac_context_t g_ac_context; 
@@ -68,11 +68,11 @@ int main(void) {
     ac_channel_init(&g_chan[1], 1);
     
     static struct ac_actor_t g_receiver;
-    struct ac_actor_descr_t receiver_descr = { (uintptr_t) actor1, 32, 32, 32 };
+    struct ac_actor_descr_t receiver_descr = { (uintptr_t) actor1, 32, 0, 0 };
     ac_actor_init(&g_receiver, 1, &receiver_descr);
 
     static struct ac_actor_t g_sender;
-    struct ac_actor_descr_t sender_descr = { (uintptr_t) actor2, 32, 32, 32 };
+    struct ac_actor_descr_t sender_descr = { (uintptr_t) actor2, 32, 0, 0 };
     ac_actor_init(&g_sender, 1, &sender_descr);
 
     ac_port_swi_handler();

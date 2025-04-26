@@ -1,6 +1,0 @@
-[build]
-target = "thumbv7m-none-eabi"
-
-rustflags = [
-    "-C", "link-args=-r -T../../core/rust_task/script.ld"
-]

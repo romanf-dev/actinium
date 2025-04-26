@@ -6,9 +6,6 @@
 #ifndef _MG_PORT_H_
 #define _MG_PORT_H_
 
-#define NO_CLZ
-#include "arch/test/ac_gpic.h"
-
 #if !defined (__GNUC__)
 #error This header is intended to be used in GNU GCC only because of non-portable asm functions. 
 #endif
@@ -39,6 +36,9 @@ static inline unsigned int mg_port_clz(uint32_t v) {
     r += (0x55afu >> c) & 3;
     return r;
 }
+
+#define AC_GPIC_CLZ(v) mg_port_clz(v)
+#include "arch/test/ac_gpic.h"
 
 #define mg_critical_section_enter() { asm volatile ("csrc mstatus, 8"); }
 #define mg_critical_section_leave() { asm volatile ("csrs mstatus, 8"); }

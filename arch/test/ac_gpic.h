@@ -20,31 +20,21 @@
 
 #include <stdint.h>
 
+#ifndef AC_GPIC_CLZ
+#define AC_GPIC_CLZ(v) __builtin_clz(v)
+#endif
+
 extern void ac_gpic_req_set(unsigned int bit);
 
 typedef uint32_t ac_gpic_mask_t;
 
 enum {
-#ifdef NO_CLZ
-    AC_GPIC_PRIO_MAX = 3,
-#else
     AC_GPIC_PRIO_MAX = 31,
-#endif
     AC_GPIC_PRIO_MIN = 0,
 };
 
-static unsigned int clz(unsigned int val) {
-#ifdef NO_CLZ
-    assert(val < 16);
-    unsigned int leading_zeros = ((0x55afu >> (val << 1)) & 3) + !val + 28;
-#else
-    unsigned int leading_zeros = __builtin_clz(val);
-#endif
-    return leading_zeros;
-}
-
 static inline unsigned int lg2(uint32_t v) {
-    return 31 - clz(v);
+    return 31 - AC_GPIC_CLZ(v);
 }
 
 /*
