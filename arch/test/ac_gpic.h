@@ -1,19 +1,16 @@
 /** 
-  ******************************************************************************
   *  @file   ac_gpic.h
   *  @brief  Generic Programmable Interrupt Controller (PIC) implementation.
   *          It simulates multiple 'vectors' inside single one.
-  *  
   *  Design description:
   *  This is a pure software implementation compatible with any interrupt
   *  controller. The module maintains 32 'vectors' available for actor execution.
   *  These vectors are represented as three dwords: masked, pending, active.
-  *  A single IRQ is used as a workhorse for the preemption: 
-  *  whenever there is unmasked vector (e.g. by set_pending) the MSIP is set 
-  *  and machine software interrupt is triggered. Pending bits are reset upon 
-  *  entering sw interrupt handler. Within handler processing vectors with
-  *  lower priority remain masked so the actor cannot preempt itself.
-  *****************************************************************************/
+  *  A single software IRQ is used as a workhorse for the preemption: 
+  *  whenever there is unmasked vector the AC_GPIC_REQUEST is used to request 
+  *  underlying software interrupt is triggered. Pending bits are reset upon 
+  *  entering sw interrupt handler.
+  */
 
 #ifndef AC_GPIC_H
 #define AC_GPIC_H
@@ -24,7 +21,9 @@
 #define AC_GPIC_CLZ(v) __builtin_clz(v)
 #endif
 
-extern void ac_gpic_req_set(unsigned int bit);
+#ifndef AC_GPIC_REQUEST
+#error AC_GPIC_REQUEST(set) is not defined.
+#endif
 
 typedef uint32_t ac_gpic_mask_t;
 
@@ -63,7 +62,7 @@ static inline void ac_gpic_request(struct ac_gpic_t* pic, unsigned int vect) {
     pic->pending = new_pending;
     
     if ((~pic->mask) & new_pending) {
-        ac_gpic_req_set(1);
+        AC_GPIC_REQUEST(1);
     }
 }
 
@@ -71,7 +70,7 @@ static inline uint32_t ac_gpic_mask(struct ac_gpic_t* pic, unsigned int prio) {
     const uint32_t mask = (((UINT32_C(1) << prio) - 1) << 1) | 1;
     const uint32_t old_mask = pic->mask;
     pic->mask = mask;
-    ac_gpic_req_set(0);
+    AC_GPIC_REQUEST(0);
 
     return old_mask;
 }
@@ -80,7 +79,7 @@ static inline void ac_gpic_unmask(struct ac_gpic_t* pic, uint32_t new_mask) {
     pic->mask = new_mask;
     
     if ((~new_mask) & pic->pending) {
-        ac_gpic_req_set(1);
+        AC_GPIC_REQUEST(1);
     }
 }
 

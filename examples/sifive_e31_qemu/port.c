@@ -9,17 +9,10 @@
 #include "actinium.h"
 #include "mtimer.h"
 
-#define MSIP_BASE ((void*) 0x2000000)
 #define MCAUSE_ENVCALL 8
 
 /* sw-implemented fake 'interrupt controller' simulated in MS interrupt. */
 struct ac_gpic_t g_pic;
-
-/* required by the porting layer */
-void ac_gpic_req_set(unsigned req) {
-    volatile uint32_t* const msip = MSIP_BASE;
-    *msip = req;
-}
 
 /* This port does not handle hardware interrupts except mtimer/msoftirq. */
 struct ac_port_frame_t* ac_port_mei_handler(struct ac_port_frame_t* frame) {

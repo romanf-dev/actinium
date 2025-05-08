@@ -1,10 +1,9 @@
 /** 
-  ******************************************************************************
-  *  @file   ac_core.h
-  *  @brief  Hosted HAL for Actinium execution inside the host OS thread.
-  *          Intended to be used for unit tests but also may be useful for 
-  *          prototyping.
-  *****************************************************************************/
+  * @file   ac_core.h
+  * @brief  Hosted HAL for Actinium execution inside the host OS thread.
+  *         Intended to be used for unit tests but also may be useful for 
+  *         prototyping.
+  */
 
 #ifndef AC_CORE_H
 #define AC_CORE_H
@@ -12,29 +11,11 @@
 #include <stdint.h>
 #include <assert.h>
 #include <setjmp.h>
-#include "ac_port.h"
-#include "mg_port.h"
-#include "ac_gpic.h"
 #include "actinium.h"
 
 /* sw-implemented interrupt controller and a pending interrupt flag */
-static struct ac_gpic_t g_pic;
-static unsigned g_req;
-
-/*
- * External function used by RV32 virtual controller to set MSIP bit indicating
- * presence of unmasked pending interrupt. In this HAL MSIP bit itself is also
- * implemented in software and must be checked manually. Interrupt request
- * flag should eventually result in sofwtare interrupt handler call.
- */
-void ac_gpic_req_set(unsigned bit) {
-    g_req = bit;
-}
-
-void mg_interrupt_request(unsigned vect) {
-    assert(vect != 0);
-    ac_gpic_request(&g_pic, vect);
-}
+struct ac_gpic_t g_pic;
+unsigned g_req;
 
 void* _ac_syscall(unsigned arg);
 
@@ -134,5 +115,6 @@ void ac_port_trap_handler(uint32_t id) {
     struct ac_port_frame_t* const frame = ac_actor_exception();
     longjmp(frame->context, 0);
 }
+
 #endif
 

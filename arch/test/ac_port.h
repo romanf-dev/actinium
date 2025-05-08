@@ -1,8 +1,7 @@
 /** 
-  ******************************************************************************
-  *  @file   ac_port.h
-  *  @brief  Porting layer for hosted environment.
-  *****************************************************************************/
+  * @file ac_port.h
+  * @brief Porting layer for hosted environment.
+  */
 
 #ifndef AC_PORT_H
 #define AC_PORT_H
@@ -12,6 +11,13 @@
 #include <stddef.h>
 #include <assert.h>
 #include <setjmp.h>
+
+enum {
+    AC_PORT_REGION_FLASH,
+    AC_PORT_REGION_SRAM,
+    AC_PORT_REGION_STACK,
+    AC_PORT_REGIONS_NUM
+};
 
 struct ac_port_frame_t {
     void* arg;
@@ -39,7 +45,7 @@ static inline void ac_port_frame_set_arg(
 }
 
 static inline void ac_port_level_mask(unsigned int level) {
-    /*TODO*/
+
 }
 
 enum {
@@ -79,7 +85,7 @@ static inline void ac_port_init(
     size_t sz, 
     struct ac_port_region_t regions[static sz]
 ) {
-    /*TODO*/
+
 }
 
 void ac_port_swi_handler(void);

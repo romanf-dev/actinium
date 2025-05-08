@@ -37,7 +37,9 @@ static inline unsigned int mg_port_clz(uint32_t v) {
     return r;
 }
 
+#define MSIP_BASE ((volatile unsigned*) 0x2000000)
 #define AC_GPIC_CLZ(v) mg_port_clz(v)
+#define AC_GPIC_REQUEST(bit) (*(MSIP_BASE) = bit)
 #include "arch/test/ac_gpic.h"
 
 #define mg_critical_section_enter() { asm volatile ("csrc mstatus, 8"); }

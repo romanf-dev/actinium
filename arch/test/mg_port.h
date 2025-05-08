@@ -23,10 +23,14 @@
 #define mg_critical_section_enter() 
 #define mg_critical_section_leave() 
 
-extern void mg_interrupt_request(unsigned int vect);
+extern unsigned g_req;
+#define AC_GPIC_REQUEST(set) (g_req = (set))
+
+#include "ac_gpic.h"
+extern struct ac_gpic_t g_pic;
 
 #define pic_vect2prio(v) (v)
-#define pic_interrupt_request(cpu,v) mg_interrupt_request(v)
+#define pic_interrupt_request(cpu, vect) ac_gpic_request(&g_pic, vect)
 
 #endif
 
