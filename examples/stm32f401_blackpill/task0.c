@@ -23,10 +23,8 @@ static inline void crash(void) {
 
 uint32_t main(const struct led_msg_t* msg) {
     static int counter = 0;
-    AC_ACTOR_START;
-    
-    for (;;) {
-        AC_AWAIT(ac_subscribe_to(1));
+
+    if (msg) {
         set_led(msg->control);
 
         if (++counter == 20) {
@@ -34,6 +32,6 @@ uint32_t main(const struct led_msg_t* msg) {
         }
     }
 
-    AC_ACTOR_END;
+    return ac_subscribe_to(1);
 }
 

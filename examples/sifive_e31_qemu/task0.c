@@ -15,10 +15,8 @@ static inline void crash(void) {
 
 uint32_t main(const struct example_msg_t* msg) {
     static int counter = 0;
-    AC_ACTOR_START;
     
-    for (;;) {
-        AC_AWAIT(ac_subscribe_to(1));
+    if (msg) {
         serial_out(msg->text);
 
         if (++counter == 3) {
@@ -26,6 +24,6 @@ uint32_t main(const struct example_msg_t* msg) {
         }
     }
 
-    AC_ACTOR_END;
+    return ac_subscribe_to(1);
 }
 

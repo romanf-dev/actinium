@@ -16,21 +16,16 @@ static inline void crash(void) {
 uint32_t main(void) {
     static unsigned int counter = 0;
     static int state = 0;
-    AC_ACTOR_START;
-    
-    for (;;) {
-        AC_AWAIT(ac_sleep_for(1000));
 
-        struct led_msg_t* msg = ac_try_pop(0);
-        msg->control = (state ^= 1);
+    struct led_msg_t* msg = ac_try_pop(0);
+    msg->control = (state ^= 1);
 
-        ac_push(1);
+    ac_push(1);
 
-        if (++counter == 20) {
-            crash();
-        }
+    if (++counter == 20) {
+        crash();
     }
 
-    AC_ACTOR_END;
+    return ac_sleep_for(1000);
 }
 

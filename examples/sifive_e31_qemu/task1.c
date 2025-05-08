@@ -15,20 +15,14 @@ static const char g_str[] = "hello!\r\n";
 _Static_assert(sizeof(g_str) <= EXAMPLE_MSG_SZ, "too long msg");
 
 uint32_t main(void) {
-    AC_ACTOR_START;
-
-    for (;;) {
-        AC_AWAIT(ac_sleep_for(1000));
-
-        struct example_msg_t* msg = ac_try_pop(0);
-        
-        for (size_t i = 0; i < sizeof(g_str); ++i) {
-            msg->text[i] = g_str[i];
-        }
-
-        ac_push(1);
+    struct example_msg_t* msg = ac_try_pop(0);
+    
+    for (size_t i = 0; i < sizeof(g_str); ++i) {
+        msg->text[i] = g_str[i];
     }
 
-    AC_ACTOR_END;
+    ac_push(1);
+
+    return ac_sleep_for(1000);
 }
 

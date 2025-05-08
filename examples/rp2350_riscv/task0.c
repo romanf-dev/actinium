@@ -16,10 +16,8 @@ static inline void crash(void) {
 
 uint32_t main(const struct led_msg_t* msg) {
     static unsigned counter = 0;
-    AC_ACTOR_START;
     
-    for (;;) {
-        AC_AWAIT(ac_subscribe_to(1));
+    if (msg) {
         sio_hw->gpio_togl = 1 << 25;
 
         if (++counter == 5) {
@@ -27,6 +25,6 @@ uint32_t main(const struct led_msg_t* msg) {
         }
     }
 
-    AC_ACTOR_END;
+    return ac_subscribe_to(1);
 }
 
