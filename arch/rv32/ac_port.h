@@ -13,6 +13,13 @@
 #include <assert.h>
 
 enum {
+    AC_PORT_REGION_FLASH,
+    AC_PORT_REGION_SRAM,
+    AC_PORT_REGION_STACK,
+    AC_PORT_REGIONS_NUM
+};
+
+enum {
     MPIE_BIT = 1 << 7,
     
     REG_RA  = 0,
@@ -112,28 +119,28 @@ static inline void ac_port_region_init(
     region->attr = attr;
 }
 
-#define _csrr(csr, data) asm volatile ("csrr %0, " #csr : "=r" (data))
-#define _csrw(csr, data) asm volatile ("csrw " #csr ", %0" : : "r" (data))
+#define ac_port_csrr(csr, data) asm volatile ("csrr %0, " #csr : "=r" (data))
+#define ac_port_csrw(csr, data) asm volatile ("csrw " #csr ", %0" : : "r" (data))
 
 static void ac_pmp_update_entry(unsigned i, uint32_t addr, uint32_t attr) {
     uint32_t pmpcfg[2];
     uint8_t* bytes = (uint8_t*) &pmpcfg[0];
 
-    _csrr(pmpcfg0, pmpcfg[0]);
-    _csrr(pmpcfg1, pmpcfg[1]);
+    ac_port_csrr(pmpcfg0, pmpcfg[0]);
+    ac_port_csrr(pmpcfg1, pmpcfg[1]);
     bytes[i] = attr;
-    _csrw(pmpcfg0, pmpcfg[0]);
-    _csrw(pmpcfg1, pmpcfg[1]); 
+    ac_port_csrw(pmpcfg0, pmpcfg[0]);
+    ac_port_csrw(pmpcfg1, pmpcfg[1]); 
 
     switch (i) {
-        case 0: _csrw(pmpaddr0, addr); break;
-        case 1: _csrw(pmpaddr1, addr); break;
-        case 2: _csrw(pmpaddr2, addr); break;
-        case 3: _csrw(pmpaddr3, addr); break;
-        case 4: _csrw(pmpaddr4, addr); break;
-        case 5: _csrw(pmpaddr5, addr); break;
-        case 6: _csrw(pmpaddr6, addr); break;
-        case 7: _csrw(pmpaddr7, addr); break;
+        case 0: ac_port_csrw(pmpaddr0, addr); break;
+        case 1: ac_port_csrw(pmpaddr1, addr); break;
+        case 2: ac_port_csrw(pmpaddr2, addr); break;
+        case 3: ac_port_csrw(pmpaddr3, addr); break;
+        case 4: ac_port_csrw(pmpaddr4, addr); break;
+        case 5: ac_port_csrw(pmpaddr5, addr); break;
+        case 6: ac_port_csrw(pmpaddr6, addr); break;
+        case 7: ac_port_csrw(pmpaddr7, addr); break;
         default: break;
     }
 }
@@ -142,30 +149,30 @@ static void ac_pmp_reprogram(unsigned sz, const struct ac_port_region_t* regions
     uint32_t pmpcfg[2];
     uint8_t* bytes = (uint8_t*) &pmpcfg[0];
 
-    _csrr(pmpcfg0, pmpcfg[0]);
-    _csrr(pmpcfg1, pmpcfg[1]);
+    ac_port_csrr(pmpcfg0, pmpcfg[0]);
+    ac_port_csrr(pmpcfg1, pmpcfg[1]);
 
     switch ((sz - 1) & 7) {
-        case 7: _csrw(pmpaddr7, regions[7].pmpaddr); bytes[7] = regions[7].attr;
+        case 7: ac_port_csrw(pmpaddr7, regions[7].pmpaddr); bytes[7] = regions[7].attr;
         // fall through
-        case 6: _csrw(pmpaddr6, regions[6].pmpaddr); bytes[6] = regions[6].attr;
+        case 6: ac_port_csrw(pmpaddr6, regions[6].pmpaddr); bytes[6] = regions[6].attr;
         // fall through
-        case 5: _csrw(pmpaddr5, regions[5].pmpaddr); bytes[5] = regions[5].attr;
+        case 5: ac_port_csrw(pmpaddr5, regions[5].pmpaddr); bytes[5] = regions[5].attr;
         // fall through
-        case 4: _csrw(pmpaddr4, regions[4].pmpaddr); bytes[4] = regions[4].attr;
+        case 4: ac_port_csrw(pmpaddr4, regions[4].pmpaddr); bytes[4] = regions[4].attr;
         // fall through
-        case 3: _csrw(pmpaddr3, regions[3].pmpaddr); bytes[3] = regions[3].attr;
+        case 3: ac_port_csrw(pmpaddr3, regions[3].pmpaddr); bytes[3] = regions[3].attr;
         // fall through
-        case 2: _csrw(pmpaddr2, regions[2].pmpaddr); bytes[2] = regions[2].attr;
+        case 2: ac_port_csrw(pmpaddr2, regions[2].pmpaddr); bytes[2] = regions[2].attr;
         // fall through
-        case 1: _csrw(pmpaddr1, regions[1].pmpaddr); bytes[1] = regions[1].attr;
+        case 1: ac_port_csrw(pmpaddr1, regions[1].pmpaddr); bytes[1] = regions[1].attr;
         // fall through
-        case 0: _csrw(pmpaddr0, regions[0].pmpaddr); bytes[0] = regions[0].attr;
+        case 0: ac_port_csrw(pmpaddr0, regions[0].pmpaddr); bytes[0] = regions[0].attr;
         // fall through
     }
 
-    _csrw(pmpcfg0, pmpcfg[0]);
-    _csrw(pmpcfg1, pmpcfg[1]);    
+    ac_port_csrw(pmpcfg0, pmpcfg[0]);
+    ac_port_csrw(pmpcfg1, pmpcfg[1]);    
 }
 
 static inline void ac_port_update_region(

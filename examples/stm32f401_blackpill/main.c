@@ -117,13 +117,6 @@ int main(void) {
     SCB->SHCSR |= SCB_SHCSR_USGFAULTENA_Msk;
     SCB->SHCSR |= SCB_SHCSR_BUSFAULTENA_Msk;
     SCB->SHCSR |= SCB_SHCSR_MEMFAULTENA_Msk;
-    
-    /* 
-     * Enable MPU with default memory map.
-     */
-    MPU->CTRL = MPU_CTRL_PRIVDEFENA_Msk | MPU_CTRL_ENABLE_Msk;
-    __DSB();
-    __ISB();
 
     ac_context_init();
 

@@ -24,6 +24,13 @@
 #error This file may be used in GNU GCC only because of non-portable functions.
 #endif
 
+enum {
+    AC_PORT_REGION_FLASH,
+    AC_PORT_REGION_SRAM,
+    AC_PORT_REGION_STACK,
+    AC_PORT_REGIONS_NUM
+};
+
 struct ac_port_frame_t {
     uint32_t r0;
     uint32_t r1;
@@ -142,19 +149,31 @@ static inline void ac_port_init(
     size_t sz, 
     struct ac_port_region_t regions[static sz]
 ) {
+    enum {
+        MPU_PRIVDEFENA = 4,
+        MPU_ENABLE = 1,
+    };
     extern const uint8_t ac_port_idle_text;
     const uintptr_t ro_base = (uintptr_t)&ac_port_idle_text;
     const size_t full_context_sz = 64;
+    volatile uint32_t* const mpu_ctrl = (void*) 0xe000ed94u;
     uintptr_t stack;
 
     asm volatile ("mov %0, sp" : "=r" (stack));
     stack &= ~(full_context_sz - 1);
     stack -= full_context_sz;
 
-    ac_port_region_init(&regions[0], ro_base, 64, AC_ATTR_RO);
-    ac_port_region_init(&regions[2], stack, full_context_sz, AC_ATTR_RW);
+    ac_port_region_init(&regions[AC_PORT_REGION_FLASH], ro_base, 64, AC_ATTR_RO);
+    ac_port_region_init(&regions[AC_PORT_REGION_STACK], stack, full_context_sz, AC_ATTR_RW);
     ac_port_mpu_reprogram(sz, regions);
     ac_port_level_mask(2); /* blocks any user actor */
+
+    /* 
+     * Enable MPU with default memory map.
+     */
+    *mpu_ctrl = MPU_PRIVDEFENA | MPU_ENABLE;
+    asm volatile ("dsb");
+    asm volatile ("isb");
 }
 
 #endif

@@ -25,11 +25,8 @@ enum {
     AC_CALL_MAX
 };
 
-enum {
-    AC_REGION_FLASH,
-    AC_REGION_SRAM,
-    AC_REGION_STACK,
-    AC_REGION_MSG,
+enum {  
+    AC_REGION_MSG = AC_PORT_REGIONS_NUM,
     AC_REGION_USER,
     AC_REGIONS_NUM,
 };
@@ -90,7 +87,6 @@ struct ac_channel_t {
 _Static_assert(offsetof(struct ac_message_t, header) == 0, "non 1st member");
 _Static_assert(offsetof(struct ac_actor_t, base) == 0, "non 1st member");
 _Static_assert(offsetof(struct ac_channel_t, base) == 0, "non 1st member");
-_Static_assert(AC_REGION_STACK == 2, "asm part depends on stack region index");
 _Static_assert(sizeof(struct ac_message_t) == sizeof(uintptr_t) * 4, "pad");
 
 extern noreturn void ac_kernel_start(void);
@@ -224,19 +220,19 @@ static inline void ac_actor_init(
     struct ac_cpu_context_t* const context = AC_GET_CONTEXT();
 
     ac_port_region_init(
-        &regions[AC_REGION_FLASH], 
+        &regions[AC_PORT_REGION_FLASH], 
         descr->flash_addr, 
         descr->flash_size, 
         AC_ATTR_RO
     );
     ac_port_region_init(
-        &regions[AC_REGION_SRAM], 
+        &regions[AC_PORT_REGION_SRAM], 
         descr->sram_addr, 
         descr->sram_size, 
         AC_ATTR_RW
     );
     ac_port_region_init(
-        &regions[AC_REGION_STACK], 
+        &regions[AC_PORT_REGION_STACK], 
         context->stacks[actor->base.prio].addr, 
         context->stacks[actor->base.prio].size, 
         AC_ATTR_RW
@@ -306,7 +302,7 @@ static inline struct ac_port_frame_t* _ac_intr_handler(
             ac_port_frame_set_arg(frame, actor->base.mailbox);
 
             if (!last) {
-                pic_interrupt_request(0, vect);
+                pic_interrupt_request(mg_cpu_this(), vect);
             }
             break;
         }
