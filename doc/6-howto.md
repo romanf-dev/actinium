@@ -20,7 +20,7 @@ Example for STM32F401:
 
         ldgen.sh 0x08000000 0x20000000 arm-none-eabi-
 
-Ldgen script treats object files (*.o) in the folder as applications sorted 
+Ldgen script treats object files (*.task) in the folder as applications sorted 
 alphabetically. That is the first file in alphabatical order will become actor
 with task_id = 0, second - with task_id = 1, etc. It produces a set of 
 temporary files and ldscript.ld.
@@ -31,4 +31,11 @@ anything except the script in the linker command line.
 
 If linker succeeds it creates image containing the kernel and apps that is 
 ready for flashing.
+
+
+
+How to write applications
+-------------------------
+
+TODO
 

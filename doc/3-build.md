@@ -14,8 +14,11 @@ framework-provided linker script. It has no deal with addresses, just
 rearrange sections.
 All relocatable files should have sections text/data/bss (possibly zero-sized),
 other allocatable sections are ignored.
+Depending on actor implementation language it is sometime needed to rename/group
+sections before using task's linker script as it expects some well-defined
+structure of the relocatable. This step is called prelinking.
 
-Third, ldgen.sh script extracts section sizes for *.o and kernel.0 files and
+Third, ldgen.sh script extracts section sizes for *.task and kernel.0 files and
 generates linker script packing the files together with proper alignment.
 Also it provides section sizes in a special symbol so kernel may
 further use this info when spawning tasks.

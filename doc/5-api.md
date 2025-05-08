@@ -3,7 +3,7 @@ API
 
 Development an Actinium application includes at least two steps:
 - writing privileged part of the app in C
-- writing unprivileged actors in C or Rust
+- writing unprivileged actors in either C, C++ or Rust
 
 Also it is possible to run actors in privileged mode and these actors
 are able to communicate via IPC with the rest of the system.
@@ -15,12 +15,15 @@ Privileged API
 Privileged code is responsible for platform initialization, creation of
 actors and channels and interrupt redirection.
 
-Initialization of the global data, runqueues, etc.
+Initialization of the global data, runqueues, etc. This function must
+be called on every CPU in the multiprocessor system.
 
         void ac_context_init();
 
 Set stack for priority specified. Pointer/size are subject for MPU 
 restrictions: memory must be power-2-sized and aligned to its size.
+This function sets stack on calling CPU so on multi-CPU system it must
+be called on every CPU and for every priority used on that CPU.
 
         void ac_context_stack_set(
             unsigned int priority, 
@@ -29,6 +32,7 @@ restrictions: memory must be power-2-sized and aligned to its size.
         );
 
 If the system has a tick source then tick handler should be called.
+This function is also CPU-local.
 
         void ac_context_tick(void);
 
