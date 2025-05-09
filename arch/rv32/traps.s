@@ -193,8 +193,6 @@ to_umode:
     mret
 
 ac_kernel_start:
-    la      sp, _estack
-    addi    sp, sp, -IDLE_STACK_SIZE
     csrs    mstatus, MSTATUS_MIE
 wait:    
     wfi
