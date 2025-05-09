@@ -229,7 +229,6 @@ struct ac_port_frame_t* ac_port_msi_handler(struct ac_port_frame_t* prev) {
 
 struct mg_context_t g_mg_context;
 struct ac_context_t g_ac_context; 
-
 static struct ac_channel_t g_chan[2];
 
 struct ac_channel_t* ac_channel_validate(
@@ -266,7 +265,6 @@ static struct ac_actor_descr_t* descr_by_id(unsigned int task_id) {
     descr.flash_size = slot[task_id].flash_size;
     descr.sram_addr = slot[task_id].sram_addr;
     descr.sram_size = slot[task_id].sram_size;
-
     return &descr;
 }
 
@@ -276,16 +274,13 @@ extern void core1_start(void (*fn)(void), uintptr_t mtvec, uintptr_t stack);
 noreturn void core1_main(void) {
     irq_disable();
     gp_init();
+    ac_context_init();
     static alignas(STACK_SZ) uint8_t stack0[STACK_SZ];
     ac_context_stack_set(0, sizeof(stack0), stack0);
     static struct ac_actor_t g_sender;
     ac_actor_init(&g_sender, SPARE_IRQ_MIN, descr_by_id(1));
     per_cpu_init();
-    irq_enable();
-
-    for (;;) {
-        asm volatile ("wfi");
-    }
+    ac_kernel_start();
 }
 
 noreturn int main(void) {
