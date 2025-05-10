@@ -18,7 +18,7 @@ Features
 - Zero-copy message passing communication
 - Timer facility
 - No heap required, no dynamic memory allocation in the kernel
-- ARM Cortex-M3/M4 (with MPU) and RISC-V (with PMP) are supported
+- ARM Cortex-M3/M33+ (with MPU) and RISC-V (with PMP) are supported
 
 
 Design principles
@@ -85,17 +85,14 @@ protocol even when both client and server are unreliable.
 Files
 -----
 
-
-| file at /core  | description |
-|----------------|-------------|
-|arch/armv7m | hardware abstraction layer for ARMv7-M |
-|arch/rv32 | hardware abstraction layer for RISC-V |
-|arch/test | abstraction layer for hosted environment |
-|actinium.h | cross-platform framework functions |
-|rust_task | library for Rust tasks support |
-|cpp_task | library for C++ tasks support |
-|c_task | library for C tasks support |
-|ldgen.sh | linker script generator to place kernel and actors in memory |
+| file | description |
+|------|-------------|
+|arch | porting layers |
+|usr | usermode libraries for supported languages |
+|examples | demo projects |
+|tests | hosted unit tests |
+|actinium.h | the actinium kernel |
+|ldgen.sh | linker script generator |
 
 
 The demo (for STM32)
