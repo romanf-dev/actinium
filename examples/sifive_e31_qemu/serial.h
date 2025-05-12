@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   serial.h
-  *  @brief  Serial output function.
-  *****************************************************************************/
+/*
+ *  @file   serial.h
+ *  @brief  Serial output function.
+ */
 
 #ifndef SERIAL_H
 #define SERIAL_H

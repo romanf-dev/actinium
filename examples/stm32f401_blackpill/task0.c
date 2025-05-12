@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   task0.c
-  *  @brief  The LED controller (message receiver).
-  *****************************************************************************/
+/*
+ *  @file   task0.c
+ *  @brief  The LED controller (message receiver).
+ */
 
 #include <stdint.h>
 #include "stm32f4xx.h"

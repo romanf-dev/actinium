@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   task0.c
-  *  @brief  Receiver task which prints the data. It crashes at every 3rd msg.
-  *****************************************************************************/
+/*
+ *  @file   task0.c
+ *  @brief  Receiver task which prints the data. It crashes at every 3rd msg.
+ */
 
 #include <stdint.h>
 #include "actinium.h"

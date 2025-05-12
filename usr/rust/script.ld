@@ -1,8 +1,7 @@
-/**
- ******************************************************************************
- * @file      script.ld
- * @brief     pre-link script for Rust tasks.
- *****************************************************************************/
+/*
+ * @file    script.ld
+ * @brief   pre-link script for Rust tasks.
+ */
 
 ENTRY(main)
 

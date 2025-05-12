@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   port.c
-  *  @brief  Functions required by RISC-V platform.
-  *****************************************************************************/
+/*
+ *  @file   port.c
+ *  @brief  Functions required by RISC-V platform.
+ */
 
 #include <stdint.h>
 #include <assert.h>
@@ -11,10 +10,10 @@
 
 #define MCAUSE_ENVCALL 8
 
-/* sw-implemented fake 'interrupt controller' simulated in MS interrupt. */
+// sw-implemented fake 'interrupt controller' simulated in MS interrupt.
 struct ac_gpic_t g_pic;
 
-/* This port does not handle hardware interrupts except mtimer/msoftirq. */
+// This port does not handle hardware interrupts except mtimer/msoftirq.
 struct ac_port_frame_t* ac_port_mei_handler(struct ac_port_frame_t* frame) {
     for (;;);
 }
@@ -30,11 +29,12 @@ struct ac_port_frame_t* ac_port_mtimer_handler(struct ac_port_frame_t* frame) {
     return frame;
 }
 
-/*
- * N.B. Synchronous syscalls return the same frame as input, otherwise it
- * is assumed that the call is asynchronous and the current actor is
- * completed.
- */
+//
+// N.B. Synchronous syscalls return the same frame as input, otherwise it
+// is assumed that the call is asynchronous and the current actor is
+// completed.
+//
+
 struct ac_port_frame_t* ac_port_trap_handler(
     struct ac_port_frame_t* frame,
     uint32_t mcause
@@ -53,11 +53,12 @@ struct ac_port_frame_t* ac_port_trap_handler(
     return next_frame;
 }
 
-/*
- * N.B. When returned frame is the same as parameter it means that called 
- * actors are completed synchronously so interrupt should be marked as
- * completed.
- */
+//
+// N.B. When returned frame is the same as parameter it means that called 
+// actors are completed synchronously so interrupt should be marked as
+// completed.
+//
+
 struct ac_port_frame_t* ac_port_msi_handler(struct ac_port_frame_t* prev) {
     const unsigned vect = ac_gpic_start(&g_pic);
     mg_critical_section_leave();

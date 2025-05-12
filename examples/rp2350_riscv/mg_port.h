@@ -1,8 +1,7 @@
-/** 
-  * @file  mg_port.h
-  * @brief Magnesium porting layer for Hazard3.
-  * License: BSD-2-Clause.
-  */
+/*
+ * @file  mg_port.h
+ * @brief Magnesium porting layer for Hazard3.
+ */
 
 #ifndef MG_PORT_H
 #define MG_PORT_H

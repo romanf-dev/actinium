@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   actinium.h
-  *  @brief  Actinium interface for usermode actors.
-  *****************************************************************************/
+/*
+ *  @file   actinium.h
+ *  @brief  Actinium interface for usermode actors.
+ */
 
 #ifndef ACTINIUM_TASK_H
 #define ACTINIUM_TASK_H

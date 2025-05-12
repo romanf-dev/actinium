@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   mtimer.h
-  *  @brief  Helper functions for RISC-V mtimer.
-  *****************************************************************************/
+/*
+ *  @file   mtimer.h
+ *  @brief  Helper functions for RISC-V mtimer.
+ */
 
 #ifndef MTIMER_H
 #define MTIMER_H

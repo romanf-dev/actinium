@@ -1,16 +1,17 @@
-/** 
-  *  @file   ac_gpic.h
-  *  @brief  Generic Programmable Interrupt Controller (PIC) implementation.
-  *          It simulates multiple 'vectors' inside single one.
-  *  Design description:
-  *  This is a pure software implementation compatible with any interrupt
-  *  controller. The module maintains 32 'vectors' available for actor execution.
-  *  These vectors are represented as three dwords: masked, pending, active.
-  *  A single software IRQ is used as a workhorse for the preemption: 
-  *  whenever there is unmasked vector the AC_GPIC_REQUEST is used to request 
-  *  underlying software interrupt is triggered. Pending bits are reset upon 
-  *  entering sw interrupt handler.
-  */
+/*
+ *  @file   ac_gpic.h
+ *  @brief  Generic Programmable Interrupt Controller (PIC) implementation.
+ *          Simulates multiple irq 'vectors' inside a single one.
+ *
+ *  Design description:
+ *  This is a pure software implementation compatible with any interrupt
+ *  controller. The module maintains 32 'vectors' available for actor execution.
+ *  These vectors are represented as three dwords: masked, pending, active.
+ *  A single software IRQ is used as a workhorse for the preemption: 
+ *  whenever there is unmasked vector the AC_GPIC_REQUEST is used to request 
+ *  underlying software interrupt. Pending bits are reset upon entering
+ *  the interrupt handler.
+ */
 
 #ifndef AC_GPIC_H
 #define AC_GPIC_H
@@ -36,18 +37,19 @@ static inline unsigned int lg2(uint32_t v) {
     return 31 - AC_GPIC_CLZ(v);
 }
 
-/*
- * Fills bits lower than MSB with ones:
- * i.e. 00001010 became 00001111,
- *      00101110 became 00111111, etc.
- * equivalent: (1 << (log2(x) + 1)) - 1
- */
+//
+// Fills bits lower than MSB with ones:
+// i.e. 00001010 became 00001111,
+//      00101110 became 00111111, etc.
+// equivalent: (1 << (log2(x) + 1)) - 1
+//
 static inline uint32_t fill_bits(uint32_t v) {
     v |= v >> 1;
     v |= v >> 2;
     v |= v >> 4;
     v |= v >> 8;
     v |= v >> 16;
+
     return v;
 }
 

@@ -1,11 +1,10 @@
 #![no_std]
 #![no_main]
 
-/**
- ******************************************************************************
- * @file      lib.rs
- * @brief     Support for Rust tasks. This code is unprivileged.
- *****************************************************************************/
+/*
+ * @file    lib.rs
+ * @brief   Support for Rust tasks. This code is unprivileged.
+ */
 
 pub mod task {
 

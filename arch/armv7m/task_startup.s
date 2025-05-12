@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   task_startup.s
-  *  @brief  Low-level syscall and startup code for Actinium usermode tasks.
-  *****************************************************************************/
+/*
+ *  @file   task_startup.s
+ *  @brief  Low-level syscall and startup code for Actinium usermode tasks.
+ */
 
 .syntax unified
 .cpu cortex-m3
@@ -49,7 +48,7 @@ start_bss_init:
 
 task_run:
     bl main
-    svc 0                 /* Task return value is the syscall arg. */
+    svc 0                 /* main return value is the syscall arg. */
     b task_run
 
 .global _ac_syscall

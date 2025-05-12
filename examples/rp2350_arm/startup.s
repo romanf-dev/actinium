@@ -1,10 +1,7 @@
 /** 
-  ******************************************************************************
-  *  @file   startup_rp2350.s
-  *  @brief  Startup code and vector table for RP2350.
-  ******************************************************************************
-  *  License: BSD-2-Clause.
-  *****************************************************************************/
+ *  @file   startup.s
+ *  @brief  Startup code and vector table for RP2350.
+ */
 
 .syntax unified
 .cpu cortex-m33

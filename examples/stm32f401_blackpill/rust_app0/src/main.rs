@@ -1,12 +1,11 @@
 #![no_std]
 #![no_main]
 
-/**
- ******************************************************************************
- * @file      main.rs
- * @brief     Demo rust task. It interprets 0 and 1 codes in the message as 
- *            'blink once' and 'blink twice' respectively.
- *****************************************************************************/
+/*
+ * @file    main.rs
+ * @brief   Demo rust task. It interprets 0 and 1 codes in the message as 
+ *          'blink once' and 'blink twice' respectively.
+ */
 
 use core::ptr::write_volatile;
 use core::panic::PanicInfo;

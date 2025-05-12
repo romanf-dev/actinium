@@ -1,8 +1,19 @@
-/** 
-  * @file  main.h
-  * @brief Demo application for RP2350 in ARM mode.
-  * License: BSD-2-Clause.
-  */
+/*
+ * @file  main.c
+ * @brief Demo application for RP2350 in ARM mode.
+ *
+ *  Design notes:
+ *  Since it is impossible to send arbitrary interrupts to another CPU the
+ *  process is two-staged: 
+ *  - Target irq is translated into the priority and is saved inside a
+ *    per-CPU bitmask.
+ *  - Inter-processor doorbell interrupt is requested.
+ *  - The doorbell handler on the target CPU translates priority from the
+ *    bitmask back to the interrupt vector.
+ *  - Local interrupt is requested on the target CPU inside a doorbell handler.
+ *  Currently the mapping is linear: 
+ *  0->N priorities is mapped to SPARE_IRQ_MIN->N vectors.
+ */
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -157,7 +168,7 @@ noreturn int main(void) {
     IO_BANK0->GPIO25_CTRL = 5;
     PADS_BANK0->GPIO25 = 0x34;
     SIO->GPIO_OE_SET = 1U << 25;
-    SIO->GPIO_OUT_SET = 1U << 25;
+    SIO->GPIO_OUT_CLR = 1U << 25;
 
     ac_context_init();
     per_cpu_init();
@@ -174,9 +185,11 @@ noreturn int main(void) {
     ac_actor_allow(&g_handler, 256, (void*)0xd0000000u, AC_ATTR_DEV);
 
     core1_start(core1_main);
+
     SysTick->LOAD = SYSTICK_VAL;
     SysTick->VAL = 0;
     SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_ENABLE_Msk;
+
     __enable_irq();
     ac_kernel_start();
 }

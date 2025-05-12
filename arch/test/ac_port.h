@@ -1,7 +1,7 @@
-/** 
-  * @file ac_port.h
-  * @brief Porting layer for hosted environment.
-  */
+/* 
+ *  @file  ac_port.h
+ *  @brief Porting layer for the hosted environment.
+ */
 
 #ifndef AC_PORT_H
 #define AC_PORT_H
@@ -49,9 +49,9 @@ static inline void ac_port_level_mask(unsigned int level) {
 }
 
 enum {
-    AC_ATTR_RO = 0,
-    AC_ATTR_RW = 1,
-    AC_ATTR_DEV= 2,
+    AC_ATTR_RO,
+    AC_ATTR_RW,
+    AC_ATTR_DEV,
 };
 
 struct ac_port_region_t {

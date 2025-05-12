@@ -1,11 +1,9 @@
-/** 
-  ******************************************************************************
-  *  @file   mtimer.h
-  *  @brief  Helper functions RISC-V mtimer from Pico SDK.
-  ******************************************************************************
-  *  Copyright (c) Raspberry Pi 2024
-  *  License: BSD-3-Clause.
-  *****************************************************************************/
+/*
+ *  @file   mtimer.h
+ *  @brief  Helper functions RISC-V mtimer from Pico SDK.
+ *  Copyright (c) Raspberry Pi 2024
+ *  License: BSD-3-Clause.
+ */
 
 #ifndef MTIMER_H
 #define MTIMER_H

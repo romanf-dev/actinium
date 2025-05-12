@@ -1,9 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file    traps.s
-  *  @brief   Low-level trap entry functions for the Actinium framework.
-  *  @warning This code depends on interrupt frame defined in ac_port.h!
-  *****************************************************************************/
+/*
+ *  @file    traps.s
+ *  @brief   Low-level trap entry functions for the Actinium framework.
+ */
 
 .extern ac_port_msi_handler
 .extern ac_port_mtimer_handler

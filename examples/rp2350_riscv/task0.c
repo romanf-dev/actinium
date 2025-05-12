@@ -1,9 +1,8 @@
-/** 
-  ******************************************************************************
-  *  @file   task0.c
-  *  @brief  Task that switches the LED on each incoming message.
-  *          The task crashes by invalid memory reference every 5th call.
-  *****************************************************************************/
+/*
+ *  @file   task0.c
+ *  @brief  Task that switches the LED on each incoming message.
+ *          The task crashes by invalid memory reference every 5th call.
+ */
 
 #include <stdint.h>
 #include "actinium.h"

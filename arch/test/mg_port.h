@@ -1,8 +1,8 @@
-/** 
-  * @file  mg_port.h
-  * @brief Magnesium porting layer for hosted test environment.
-  * License: Public domain. The code is provided as is without any warranty.
-  */
+/*
+ * @file  mg_port.h
+ * @brief Magnesium porting layer for hosted test environment.
+ */
+
 #ifndef _MG_PORT_H_
 #define _MG_PORT_H_
 
@@ -11,7 +11,7 @@
 #endif
 
 #if !defined MG_PRIO_MAX
-#define MG_PRIO_MAX 8
+#define MG_PRIO_MAX 31
 #endif 
 
 #if !defined MG_TIMERQ_MAX

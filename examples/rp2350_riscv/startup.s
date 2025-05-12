@@ -1,8 +1,7 @@
-/** 
-  * @file  startup.s
-  * @brief Startup code for RISC-V core in RP2350.
-  * License: BSD-2-Clause.
-  */
+/*
+ * @file  startup.s
+ * @brief Startup code for RISC-V core in RP2350.
+ */
 
 .section .entry_point
 .align 4

@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   main.c
-  *  @brief  Demo application for the Actinium framework. The kernel part.
-  *****************************************************************************/
+/*
+ *  @file   main.c
+ *  @brief  Demo application for the Actinium framework. The kernel part.
+ */
 
 #include <stdint.h>
 #include <stdalign.h>
@@ -20,7 +19,7 @@ void __assert_func(const char *f, int line, const char *fn, const char *expr) {
 
 /* required by the framework */
 void ac_actor_error(struct ac_actor_t* actor) {
-    serial_out("task crash, restart\r\n");
+    serial_out("kernel: task crash, restart\r\n");
     ac_actor_restart(actor);
 }
 

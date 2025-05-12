@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   startup.s
-  *  @brief  Low level entry point.
-  *****************************************************************************/
+/*
+ *  @file   startup.s
+ *  @brief  Low level entry point.
+ */
 
 .global Reset_Handler
 

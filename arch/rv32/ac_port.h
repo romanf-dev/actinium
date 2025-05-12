@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   ac_port.h
-  *  @brief  RISCV32 hardware abstraction layer for the Actinium framework.
-  *****************************************************************************/
+/* 
+ *  @file   ac_port.h
+ *  @brief  RISCV32 hardware abstraction layer for the Actinium framework.
+ */
 
 #ifndef AC_PORT_H
 #define AC_PORT_H
@@ -11,6 +10,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <assert.h>
+#include "mg_port.h"
 
 enum {
     AC_PORT_REGION_FLASH,
@@ -55,14 +55,15 @@ enum {
     REG_T6  = 15,
 };
 
-/*
- * There are two distinct interrupt frames: small and full ones. Small frame
- * does not contain callee-saved registers, so register array contains only
- * 16 registers instead of 31. Registers are saved in the following order:
- * x1,x5-x7,x10-x11,x12-x17,x28-x31 then rest of the frame x2-x4,x8-x9,x18-x27.
- * Saved mstatus must have MIE=0 and MPIE=1 to avoid interrupts during 
- * context switch.
- */
+//
+// There are two distinct interrupt frames: small and full ones. Small frame
+// does not contain callee-saved registers, so register array contains only
+// 16 registers instead of 31. Registers are saved in the following order:
+// x1,x5-x7,x10-x11,x12-x17,x28-x31 then rest of the frame x2-x4,x8-x9,x18-x27.
+// Saved mstatus must have MIE=0 and MPIE=1 to avoid interrupts during 
+// context switch.
+//
+
 struct ac_port_frame_t {
     uint32_t mstatus;
     uint32_t pc;
@@ -179,18 +180,18 @@ static inline void ac_port_update_region(
     unsigned int i, 
     const struct ac_port_region_t* region
 ) {
-    asm volatile ("csrc mstatus, 8");
+    mg_critical_section_enter();
     ac_pmp_update_entry(i, region->pmpaddr, region->attr);
-    asm volatile ("csrs mstatus, 8");
+    mg_critical_section_leave();
 }
 
 static inline void ac_port_mpu_reprogram(
     size_t sz, 
     const struct ac_port_region_t* regions
 ) {
-    asm volatile ("csrc mstatus, 8");
+    mg_critical_section_enter();
     ac_pmp_reprogram(sz, regions);
-    asm volatile ("csrs mstatus, 8");
+    mg_critical_section_leave();
 }
 
 #endif

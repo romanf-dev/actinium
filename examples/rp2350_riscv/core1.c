@@ -2,7 +2,6 @@
   ******************************************************************************
   *  @file   core1.c
   *  @brief  Helper functions for core1 startup from Pico SDK.
-
   ******************************************************************************
   *  Copyright (c) Raspberry Pi 2024
   *  License: BSD-3-Clause.

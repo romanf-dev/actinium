@@ -1,14 +1,13 @@
-/** 
-  ******************************************************************************
-  *  @file   test0.c
-  *  @brief  Demo for hosted HAL.
-  *****************************************************************************/
+/*
+ *  @file   alloc_send.c
+ *  @brief  Demo for hosted HAL.
+ */
 
 #include <stdio.h>
 #include <stdalign.h>
 #include <setjmp.h>
 #include <assert.h>
-#include "ac_core.h"           /* kernel API */
+#include "ac_core.h"          /* kernel API */
 #include "usr/c/actinium.h"   /* user API */
 
 struct mg_context_t g_mg_context;

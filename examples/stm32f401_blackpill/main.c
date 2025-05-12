@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   main.c
-  *  @brief  Demo application for the Actinium framework. The kernel part.
-  *****************************************************************************/
+/*
+ *  @file   main.c
+ *  @brief  Demo application for the Actinium framework. The kernel part.
+ */
 
 #include <stdint.h>
 #include <stdalign.h>
@@ -36,6 +35,18 @@ void __assert_func(
     const char *expr
 ) {
     Error_Handler();
+}
+
+void* ac_intr_handler(uint32_t vect, void* frame) {
+    return _ac_intr_handler(vect, frame);
+}
+
+void* ac_svc_handler(uint32_t arg, void* frame) {
+    return _ac_svc_handler(arg, frame);
+}
+
+void* ac_trap_handler(uint32_t id) {
+    return ac_actor_exception();
 }
 
 struct mg_context_t g_mg_context;
@@ -80,9 +91,9 @@ static struct ac_actor_descr_t* descr_by_id(unsigned int task_id) {
 }
 
 int main(void) {
-    /* 
-     * Setup clocks and other hardware stuff...
-     */
+    // 
+    // Setup clocks and other hardware stuff...
+    //
     RCC->CR |= RCC_CR_HSEON;            
     while((RCC->CR & RCC_CR_HSERDY) == 0) {
         ;
@@ -105,43 +116,43 @@ int main(void) {
 
     RCC->CR &= ~RCC_CR_HSION;
 
-    /* 
-     * Enable LED. 
-     */
+    // 
+    // Enable LED. 
+    //
     RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
     GPIOC->MODER |= GPIO_MODER_MODER13_0;
 
-    /* 
-     * Enable all exceptions.
-     */
+    // 
+    // Enable all exceptions.
+    //
     SCB->SHCSR |= SCB_SHCSR_USGFAULTENA_Msk;
     SCB->SHCSR |= SCB_SHCSR_BUSFAULTENA_Msk;
     SCB->SHCSR |= SCB_SHCSR_MEMFAULTENA_Msk;
 
     ac_context_init();
 
-    /* 
-     * Both actors share the same priority 2 so there's only one stack.
-     */
+    // 
+    // Both actors share the same priority 2 so there's only one stack.
+    //
     static alignas(1024) uint8_t stack0[1024];
     ac_context_stack_set(2, sizeof(stack0), stack0);
 
-    /* 
-     * Create global objects, 1 is used as unique type id, any value may be used.
-     */
+    // 
+    // Create global objects, 1 is used as unique type id, any value may be used.
+    //
     static alignas(sizeof(struct led_msg_t)) struct led_msg_t g_storage[3];
     ac_channel_init_ex(&g_chan[0], sizeof(g_storage), g_storage, sizeof(g_storage[0]), 1);
     ac_channel_init(&g_chan[1], 1);
 
-    /* 
-     * Use 8 priority levels, so five subpriority bits are 4:0.
-     */
+    // 
+    // Use 8 priority levels, so five subpriority bits are 4:0.
+    //
     NVIC_SetPriorityGrouping(4);
 
-    /* 
-     * Enable two first vectors and set priotity 2.
-     * Priority 1 is used for the tick and 0 is reserved for traps.
-     */
+    // 
+    // Enable two first vectors and set priotity 2.
+    // Priority 1 is used for the tick and 0 is reserved for traps.
+    //
     NVIC_SetPriority(0, 2);
     NVIC_SetPriority(1, 2);
     NVIC_EnableIRQ(0);
@@ -149,31 +160,28 @@ int main(void) {
     NVIC_SetPriority(SysTick_IRQn, 1);
     NVIC_SetPriority(SVCall_IRQn, 1);
 
-    /* 
-     * Create the 'controller' actor and allow to access GPIOC.
-     * The second argument is interrupt vector. Third argument is binary file
-     * id. 
-     */
+    // 
+    // Create the 'controller' actor and allow to access GPIOC.
+    // The second argument is interrupt vector. Third argument is binary file
+    // id. 
+    //
     static struct ac_actor_t g_handler;
     ac_actor_init(&g_handler, 0, descr_by_id(0));
     ac_actor_allow(&g_handler, 64, (void*)GPIOC_BASE, AC_ATTR_DEV);
 
-    /* 
-     * Create the 'sender' actor, who sends messages to the 'controller'.
-     */
+    //
+    // Create the 'sender' actor, who sends messages to the 'controller'.
+    //
     static struct ac_actor_t g_sender;
     ac_actor_init(&g_sender, 1, descr_by_id(1));
 
-    /* 
-     * Initialize tick source for 1 ms.
-     */
+    // 
+    // Initialize tick source for 1 ms.
+    //
     SysTick->LOAD = 84000U - 1U;
     SysTick->VAL = 0;
     SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_TICKINT_Msk | SysTick_CTRL_ENABLE_Msk;
 
-    /* 
-     * Does not return... 
-     */
     ac_kernel_start();
 
     return 0; /* Make compiler happy. */

@@ -1,8 +1,7 @@
 /** 
-  ******************************************************************************
-  *  @file   kernel.h
-  *  @brief  Kernel linker script for SiFive e31.
-  *****************************************************************************/
+ *  @file   kernel.ld
+ *  @brief  Kernel linker script for SiFive e31.
+ */
 
 OUTPUT_ARCH( "riscv" )
 

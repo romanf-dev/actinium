@@ -1,12 +1,10 @@
-/** 
-  ******************************************************************************
-  *  @file   actinium0.s
-  *  @brief  Low-level interrupt-entry functions for the Actinium framework.
-  *          Here be dragons!
-  *****************************************************************************/
+/*
+ *  @file   traps.s
+ *  @brief  Low-level interrupt-entry functions for the Actinium framework.
+ */
 
 .syntax unified
-.cpu cortex-m4
+.cpu cortex-m3
 .fpu softvfp
 .thumb
 
@@ -31,8 +29,8 @@
  * frame is pushed into MSP. As handlers are always stacked this is not an
  * issue but requires some care in the low-level code.
  * LSB of the frame pointer is also used as a flag indicating return mode:
- * 0 - usermode frame, 1 - kernel-mode frame. This bit is also selects
- * the appropriate stack pointer on return either MSP or PSP.
+ * 0 - usermode frame, 1 - kernel-mode frame. This bit also selects
+ * the appropriate stack pointer on return.
  */
 
 .type ac_port_intr_entry, %function
@@ -76,8 +74,8 @@ ac_port_trap_entry:
 
 /*
  * Syscall handler. Syscalls are allowed from usermode only so no need to 
- * check the LR. If the handler returns the same frame is its input it
- * means that this call is synchronous.
+ * check the LR. If the handler returns the same frame as its input it
+ * means that the call is synchronous.
  * Syscall exception must have priority less than other faults so they
  * will take priority in case of errors during the stacking.
  */

@@ -1,8 +1,19 @@
-/** 
-  * @file  main.h
-  * @brief Demo application for RP2350 in RISC-V mode.
-  * License: BSD-2-Clause.
-  */
+/*
+ *  @file  main.h
+ *  @brief Demo application for RP2350 in RISC-V mode.
+ *
+ *  Design notes:
+ *  Since it is impossible to send arbitrary interrupts to another CPU the
+ *  process is two-staged: 
+ *  - Target irq is translated into the priority and is saved inside a
+ *    per-CPU bitmask.
+ *  - Inter-processor doorbell interrupt is requested.
+ *  - The doorbell handler on the target CPU translates priority from the
+ *    bitmask back to the interrupt vector.
+ *  - Local interrupt is requested on the target CPU inside a doorbell handler.
+ *  Currently the mapping is linear: 
+ *  0->N priorities is mapped to SPARE_IRQ_MIN->N vectors.
+ */
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -80,16 +91,6 @@ static inline void request_local_interrupt(unsigned vect) {
     csrw(meifa, (mask << 16) | window);
 }
 
-/*
- * Since it is impossible to send arbitrary interrupts to another CPU the
- * process is two-staged: 
- * - target irq is translated into priority and is saved inside per-CPU bitmask
- * - inter-processor doorbell irq is requested
- * - doorbell handler on target CPu translates priority back to vector
- * - local interrupt is requested on the target CPU
- * Currently the mapping is linear: 
- * 0->N priorities is mapped to SPARE_IRQ_MIN->N vectors.
- */
 void pic_interrupt_request(unsigned cpu, unsigned vect) {
     if (cpu != mg_cpu_this()) {
         const unsigned prio = pic_vect2prio(vect);
@@ -145,11 +146,12 @@ static inline void enable_vect(unsigned int vec) {
     csrw(meiea, enabled_irqs | window);
 }
 
-/*
- * PMP region 7 is used to override hardwired regions 8+. It disables access
- * to the whole address space unless some lower numbered regions are also 
- * match the address.
- */
+//
+// PMP region 7 is used to override hardwired regions 8+. It disables access
+// to the whole address space unless some lower numbered regions are also 
+// match the address.
+//
+
 static inline void per_cpu_init(void) {
     csrw(pmpaddr7, 0x3fffffff);
     csrw(pmpcfg1, 0x18000000);
@@ -160,13 +162,14 @@ static inline void per_cpu_init(void) {
     riscv_timer_set_mtimecmp(CLK_PER_TICK);
 }
 
-/*
- * There are two kinds in interrupts: those who is fully handled inside the
- * handler and whose handling is performed in usermode (running actors).
- * If handler returns new interrupt frame it means that we have to go to 
- * usermode. In this case we DO NOT want to perform priority unstacking on
- * mret so the MRETEIRQ bit in MEICONTEXT is cleared.
- */
+//
+// There are two kinds in interrupts: those who is fully handled inside the
+// handler and whose handling is performed in usermode (running actors).
+// If handler returns new interrupt frame it means that we have to go to 
+// usermode. In this case we DO NOT want to perform priority unstacking on
+// mret so the MRETEIRQ bit in MEICONTEXT is cleared.
+//
+
 struct ac_port_frame_t* ac_port_mei_handler(struct ac_port_frame_t* frame) {
     uint32_t context = 0;
     uint32_t next = 0;
@@ -191,11 +194,12 @@ struct ac_port_frame_t* ac_port_mei_handler(struct ac_port_frame_t* frame) {
     return next_frame;
 }
 
-/*
- * In case of either blocking call or exception the priority unstacking has
- * to be performed. So when next frame is not the previous one it means that
- * the current actor is completed by some reason, set the MRETEIRQ flag.
- */
+//
+// In case of either blocking call or exception the priority unstacking has
+// to be performed. So when next frame is not the previous one it means that
+// the current actor is completed by some reason, set the MRETEIRQ flag.
+//
+
 struct ac_port_frame_t* ac_port_trap_handler(
     struct ac_port_frame_t* frame,
     uint32_t mcause

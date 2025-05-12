@@ -1,22 +1,24 @@
-/**
-  *  @file   ac_port.h
-  *  @brief  ARMv8M hardware abstraction layer for the Actinium framework.
-  *  Design notes:
-  *  - LR register is used as a 'full restart marker'. Nonzero LR on actor 
-  *    activation means that this is either first call or the call following
-  *    actor's crash so full initialization of data/bss sections should be 
-  *    performed.
-  *  - Priority levels 0 and 1 are reserved for exceptions and the tick 
-  *    respectively. These priorities must not be used for actors.
-  *  - Idle procedure uses the top ot interrupt stack to hold the context.
-  *  - Exception return procedure acts as a barrier for MPU reprogramming so
-  *    no need for explicit DSB/ISB here.
-  */
+/*
+ *  @file   ac_port.h
+ *  @brief  ARMv8M hardware abstraction layer for the Actinium framework.
+ *
+ *  Design notes:
+ *  - LR register is used as a 'full restart marker'. Nonzero LR on actor 
+ *    activation means that this is either first call or the call following
+ *    actor's crash so full initialization of data/bss sections should be 
+ *    performed.
+ *  - Priority levels 0 and 1 are reserved for exceptions and the tick 
+ *    respectively. These priorities must not be used for actors.
+ *  - Exception return procedure acts as a barrier for MPU reprogramming so
+ *    no need for explicit DSB/ISB.
+ */
 
 #ifndef AC_PORT_H
 #define AC_PORT_H
 
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 #include "mg_port.h"
 
 #if !defined (__GNUC__)
@@ -76,19 +78,19 @@ struct ac_port_region_t {
     uint32_t rlar;
 };
 
-/* MAIR values memo: 
- * - device memory nGnRE = 0x04, 
- * - normal memory outer shareable, WT/WA cacheable, nontransient = 0xaa
- *
- * Peripheral regions use MAIR index 0, other regions use MAIR index 1.
- * Attribute consists of two part: low byte holds RLAR status bits,
- * high byte holds RBAR status bits.
- */
+//  MAIR values memo: 
+//  - device memory nGnRE = 0x04, 
+//  - normal memory outer shareable, WT/WA cacheable, nontransient = 0xaa.
+//
+//  Peripheral regions use MAIR index 0, other regions use MAIR index 1.
+//  Attribute consists of two part: low byte holds RLAR status bits,
+//  high byte holds RBAR status bits.
+//
 
 enum {
     AC_PORT_MAIR_VAL = 0xaa04,
 
-    /*           | SH + AP  |  XN bit  | mair idx | en */
+    //  name     | SH + AP  |  XN bit  | mair idx | en
     AC_ATTR_RO = (0xb << 9) | (0 << 8) | (0 << 1) | 1,
     AC_ATTR_RW = (0x9 << 9) | (1 << 8) | (0 << 1) | 1,
     AC_ATTR_DEV= (0x9 << 9) | (1 << 8) | (1 << 1) | 1,
@@ -151,13 +153,14 @@ static inline void ac_port_mpu_reprogram(
     mg_critical_section_leave();
 }
 
-/*
- * This port supports SMP so this function should be called on each CPU.
- * Since each CPU uses its own stack and CPUs number is unknown idle
- * function's stack is allocated using the current stack pointer.
- * Later kernel start procedure will read the stack pointer from the MPU
- * directly.
- */
+//
+// This port supports SMP so this function should be called on each CPU.
+// Since each CPU uses its own stack and CPUs number is unknown idle
+// function's stack is allocated using the current stack pointer.
+// Later kernel start procedure will read the stack pointer from the MPU
+// directly.
+//
+
 static inline void ac_port_init(
     size_t sz, 
     struct ac_port_region_t regions[static sz]

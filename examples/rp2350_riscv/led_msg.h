@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   led_msg.h
-  *  @brief  Message type for actor communication.
-  *****************************************************************************/
+/*
+ *  @file   led_msg.h
+ *  @brief  Message type for actor communication.
+ */
 
 #ifndef LED_MSG_H
 #define LED_MSG_H

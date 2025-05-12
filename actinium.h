@@ -1,9 +1,8 @@
-/** 
-  ******************************************************************************
-  *  @file   actinium.h
-  *  @brief  Implementation of the Actinium API. Functions with underline prefix
-  *          are internal.
-  *****************************************************************************/
+/*
+ *  @file   actinium.h
+ *  @brief  Actinium kernel implementation. Functions with underline prefix
+ *  are internal.
+ */
 
 #ifndef ACTINIUM_H
 #define ACTINIUM_H
@@ -118,7 +117,6 @@ static inline void ac_context_tick(void) {
 
 static inline void ac_context_stack_set(unsigned prio, size_t sz, void* ptr) {
     struct ac_cpu_context_t* const context = AC_GET_CONTEXT();
-
     assert((sz & (sz - 1)) == 0);
     assert(sz > sizeof(struct ac_port_frame_t));
     context->stacks[prio].addr = (uintptr_t) ptr;
@@ -265,7 +263,6 @@ static inline struct ac_port_frame_t* _ac_frame_create(
     const size_t size = context->stacks[prio].size;
     const uintptr_t stack_top = base + size;
     const bool restart_req = actor->restart_req;
-
     actor->restart_req = false;
     assert(base != 0);
     return ac_port_frame_alloc(stack_top, actor->func, restart_req);

@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   task_startup.s
-  *  @brief  Low-level syscall and startup code for Actinium usermode tasks.
-  *****************************************************************************/
+/*
+ *  @file   task_startup.s
+ *  @brief  Low-level syscall and startup code for Actinium usermode tasks.
+ */
 
 .syntax unified
 .cpu cortex-m3

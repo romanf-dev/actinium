@@ -1,24 +1,25 @@
-/** 
-  ******************************************************************************
-  *  @file   ac_port.h
-  *  @brief  ARMv7M hardware abstraction layer for the Actinium framework.
-  *
-  *  Design notes:
-  *  - LR register is used as a 'full restart marker'. Nonzero LR on actor 
-  *    activation means that this is either first call or the call following
-  *    actor's crash so full initialization of data/bss sections should be 
-  *    performed.
-  *  - Priority levels 0 and 1 are reserved for exceptions and the tick 
-  *    respectively. These priorities must not be used for actors.
-  *  - Idle procedure uses the top ot interrupt stack to hold the context.
-  *  - Exception return procedure acts as a barrier for MPU reprogramming so
-  *    no need for explicit DSB/ISB here.
-  *****************************************************************************/
+/*
+ *  @file   ac_port.h
+ *  @brief  ARMv7M hardware abstraction layer for the Actinium framework.
+ *
+ *  Design notes:
+ *  - LR register is used as a 'full restart marker'. Nonzero LR on actor 
+ *    activation means that this is either first call or the call following
+ *    actor's crash so full initialization of data/bss sections should be 
+ *    performed.
+ *  - Priority levels 0 and 1 are reserved for exceptions and the tick 
+ *    respectively. These priorities must not be used for actors.
+ *  - Exception return procedure acts as a barrier for MPU reprogramming so
+ *    no need for explicit DSB/ISB.
+ */
 
 #ifndef AC_PORT_H
 #define AC_PORT_H
 
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include "mg_port.h"
 
 #if !defined (__GNUC__)
 #error This file may be used in GNU GCC only because of non-portable functions.
@@ -73,7 +74,7 @@ static inline void ac_port_level_mask(unsigned int level) {
 }
 
 enum {
-/*     name      |   XN    |  AP[2:0]  | S C B bits | ENABLED */
+    //   name    |   XN    |  AP[2:0]  | S C B bits | ENABLED
     AC_ATTR_RO =             (6 << 24) | (2 << 16)  | 1,
     AC_ATTR_RW = (1 << 28) | (3 << 24) | (6 << 16)  | 1,
     AC_ATTR_DEV= (1 << 28) | (3 << 24) | (5 << 16)  | 1,
@@ -135,16 +136,17 @@ static inline void ac_port_mpu_reprogram(
     mg_critical_section_leave();
 }
 
-/*
- * The kernel sets CONTROL reg just once so code of 'idle' is also subjected
- * to MPU restrictions. This code sets up minimal MPU regions required for 
- * idle execution. The asm part defines the special symbol pointing to the 
- * code of the idle function. By convention the code is aligned to 64. Idle 
- * stack is derived from the current SP and should be large enough to hold the 
- * full context (64 bytes). The asm part reads SP directly from the MPU 
- * before the idle loop is started. It is expected that this code is called
- * within the main() so SP is near to its initial value.
- */
+//
+// The kernel sets CONTROL just once so code of 'idle' is also subjected
+// to MPU restrictions. This code sets up minimal MPU regions required for 
+// idle execution. The asm part defines the special symbol pointing to the 
+// code of the idle function. By convention the code is aligned to 64. Idle 
+// stack is derived from the current SP and should be large enough to hold the
+// full context (64 bytes). The asm part reads SP directly from the MPU 
+// before the idle loop is started. It is expected that this code is called
+// within the main() so SP is near to its initial value.
+//
+
 static inline void ac_port_init(
     size_t sz, 
     struct ac_port_region_t regions[static sz]
@@ -168,9 +170,6 @@ static inline void ac_port_init(
     ac_port_mpu_reprogram(sz, regions);
     ac_port_level_mask(2); /* blocks any user actor */
 
-    /* 
-     * Enable MPU with default memory map.
-     */
     *mpu_ctrl = MPU_PRIVDEFENA | MPU_ENABLE;
     asm volatile ("dsb");
     asm volatile ("isb");

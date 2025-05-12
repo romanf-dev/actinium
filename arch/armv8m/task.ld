@@ -1,8 +1,7 @@
-/**
- ******************************************************************************
- * @file      task.ld
- * @brief     Linker script for unprivileged tasks.
- *****************************************************************************/
+/*
+ *  @file   task.ld
+ *  @brief  Linker script for unprivileged tasks.
+ */
 
 ENTRY(main)
 

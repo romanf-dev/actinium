@@ -1,8 +1,8 @@
 /** 
   * @file  mg_port.h
   * @brief Magnesium porting layer for generic RISCV32.
-  * License: Public domain. The code is provided as is without any warranty.
   */
+
 #ifndef _MG_PORT_H_
 #define _MG_PORT_H_
 
@@ -18,9 +18,10 @@
 #define MG_TIMERQ_MAX 10
 #endif
 
-/* 
- * Sw-implemented CLZ as Zbb is not supported by E31.
- */
+// 
+// Sw-implemented CLZ as Zbb is not supported by E31.
+//
+
 static inline unsigned int mg_port_clz(uint32_t v) {
     uint32_t r = !v;
     uint32_t c = (v < 0x00010000u) << 4;

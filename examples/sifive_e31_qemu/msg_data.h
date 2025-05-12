@@ -1,8 +1,7 @@
-/** 
-  ******************************************************************************
-  *  @file   msg_data.h
-  *  @brief  Message type for actor communication.
-  *****************************************************************************/
+/*
+ *  @file   msg_data.h
+ *  @brief  Message type for actor communication.
+ */
 
 #ifndef MSG_DATA_H
 #define MSG_DATA_H
