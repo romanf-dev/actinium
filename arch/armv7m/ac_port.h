@@ -49,11 +49,6 @@ static inline struct ac_port_frame_t* ac_port_frame_alloc(
     bool restart_marker
 ) {
     struct ac_port_frame_t* const frame = ((struct ac_port_frame_t*) base) - 1;
-    frame->r0 = 0;
-    frame->r1 = 0;
-    frame->r2 = 0;
-    frame->r3 = 0;
-    frame->r12 = 0;
     frame->lr = restart_marker;
     frame->pc = func | 1; /* thumb bit */
     frame->xPSR = 1 << 24;
@@ -110,7 +105,6 @@ static inline void ac_port_update_region_nosync(
     } * const mpu = (void*) 0xE000ED90UL;
 
     mpu->rbar = region->addr | (1 << 4) | region_id;
-    mpu->rasr = 0;
     mpu->rasr = region->attr;
 }
 

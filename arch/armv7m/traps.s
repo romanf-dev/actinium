@@ -35,7 +35,6 @@
 
 .type ac_port_intr_entry, %function
 ac_port_intr_entry:
-    stmdb   sp!, { r4-r11 } // Save callee-saved registers on MSP always.
     mrs     r0, psp         // MRS can't be in IT block, read for further use.
     tst     lr, #4          // Is usermode interrupted?
     ite     eq              //
@@ -43,11 +42,14 @@ ac_port_intr_entry:
     movne   r1, r0          // Yes, frame in previously read PSP.
     mrs     r0, ipsr        // Provide 1st argument, vector number.
     subs    r0, #16         // Get interrupt vector by exception id.
+    push    { r4 }
     movs    r4, r1          // Preserve the frame ptr in callee-saved reg.
     bl      ac_intr_handler // Get the next frame in R0.
-    cmp     r0, r4          // Is new frame allocated?
+    movs    r1, r4
+    pop     { r4 }
+    cmp     r0, r1          // Is new frame allocated?
     it      ne
-    subsne  sp, #32         // Yes, simulate STMDB with high regs.
+    stmdbne sp!, { r4-r11 } // Yes, save hi registers of the preempted actor on MSP.
     b       exc_return
 
 /*
@@ -70,6 +72,7 @@ ac_port_trap_entry:
     isb
     mrs     r0, ipsr
     bl      ac_trap_handler
+    ldmia   sp!, { r4-r11 } // Load the high registers of the next actor.
     b       exc_return
 
 /*
@@ -84,14 +87,16 @@ ac_port_trap_entry:
 ac_port_svc_entry:
     tst     lr, #4          // First call from main is a special case.
     beq     enable_umode    // It is used to enable unprivileged threads.
-    stmdb   sp!, { r4-r11 } // Save high registers on the MSP stack.
     mrs     r1, psp         // Read the frame pointer.
     ldr     r0, [r1]        // Read syscall argument in r0 from the frame.
-    movs    r4, r1          // Preserve the frame ptr in callee-saved reg. 
+    push    { r4 }
+    movs    r4, r1          // Preserve the frame ptr in callee-saved reg.
     bl      ac_svc_handler  // Get the next frame.
-    cmp     r0, r4          // Is this call is synchronous (same frame)?
+    movs    r1, r4
+    pop     { r4 }
+    cmp     r0, r1          // Is this call is synchronous (same frame)?
     it      ne
-    addsne  sp, #32         // No, skip high registers pushed by STMDB.
+    ldmiane sp!, { r4-r11 } // No, load hi registers of the previous actor.
     b       exc_return    
 
 /*
@@ -109,7 +114,6 @@ exc_return:
     moveq   r1, r0          // No, return to thread, overwrite PSP in r1.
     orreq   lr, #12         // LR = 0xfffffffd, 'return to thread using PSP'.
     msr     psp, r1         // Update the PSP.
-    ldmia   sp!, { r4-r11 } // Load the high registers of the next actor.
     bx      lr              // Unstacking.
 
 /*
