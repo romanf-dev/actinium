@@ -4,8 +4,6 @@ coroutines. It provides both hardware-assisted scheduling and memory
 protection for fault isolation. Also, it is small and simple.
 Kernel code is currently written in C but unprivileged tasks may be 
 written in either C, C++ or Rust.
-Please note it is under development and should not be used in 
-security/safety-critical projects.
 
 
 Features
@@ -95,8 +93,8 @@ Files
 |ldgen.sh | linker script generator |
 
 
-The demo (for STM32)
---------------------
+The demo (for STM32 black pill)
+-------------------------------
 
 The demo contains two tasks: sender and controller. The 'sender' sends
 requests to toggle LED to 'controller' who has access to the corresponding 
