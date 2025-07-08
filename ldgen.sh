@@ -11,19 +11,18 @@ section_sz() {
 
 round_to_power2() {
     local tmp=$1
-    ((tmp |= 31 * ($tmp != 0)))
-    ((tmp -= ($tmp != 0)))
+    ((tmp |= 31))
     ((tmp |= $tmp >> 1))
     ((tmp |= $tmp >> 2))
     ((tmp |= $tmp >> 4))
     ((tmp |= $tmp >> 8))
     ((tmp |= $tmp >> 16))
-    ((tmp += ($tmp != 0)))
+    ((tmp += 1))
     echo $tmp
 }
 
 alignas() {
-    local low_mask=$(($2-1))
+    local low_mask=$(($2 - ($2 != 0)))
     local high_mask=$((~$low_mask))
     local tmp=$1
     if [ $(( $tmp & $low_mask )) -ne 0 ]; then
