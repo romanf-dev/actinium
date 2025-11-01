@@ -30,7 +30,6 @@ void* _ac_syscall(unsigned arg);
 //
 void ac_port_swi_handler(void) {
     const unsigned vect = ac_gpic_start(&g_pic);
-    assert(vect != 0); 
 
     //
     // Create the new 'interrupt frame' on stack and call the kernel.
