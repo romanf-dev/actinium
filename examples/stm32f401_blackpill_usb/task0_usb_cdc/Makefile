@@ -1,22 +1,20 @@
 #
-# Simepl makefile for compiling all .c and .s files in the current folder.
-# No dependency tracking, use make clean if a header is changed.
+# Simple makefile for compiling all .c in the current folder.
 #
 
+GCC_PREFIX ?= arm-none-eabi-
 SRCS = $(wildcard *.c)
 OBJS = $(patsubst %.c,%.o,$(SRCS))
 
-GCC_PREFIX ?= arm-none-eabi-
+.DEFAULT_GOAL := all
+.PHONY: all clean
 
 %.o : %.c
-	arm-none-eabi-gcc -ffreestanding -mcpu=cortex-m4 -std=gnu11 -DSTM32F401xC -c -I.. -I../../../usr/c -I. -I../CMSIS -O2 -mthumb -o $@ $<
-
-%.o : %.s
-	arm-none-eabi-gcc -mcpu=cortex-m4 -c -x assembler-with-cpp -mthumb -o $@ $<
+	$(GCC_PREFIX)gcc -ffreestanding -mcpu=cortex-m4 -std=gnu11 -DSTM32F401xC -c -I.. -I../../../usr/c -I. -I../CMSIS -O2 -mthumb -o $@ $<
 
 all : clean $(OBJS)
-	arm-none-eabi-ld -r -nostdlib -o app.task $(OBJS)
+	$(GCC_PREFIX)ld -n -r -nostdlib -o usb.rel $(OBJS)
 
 clean :
-	rm -f *.o *.task
+	rm -f *.o *.rel
 

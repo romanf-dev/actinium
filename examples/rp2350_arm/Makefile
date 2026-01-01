@@ -1,16 +1,16 @@
-
 GCC_PREFIX ?= arm-none-eabi-
 AC_PATH ?= ../..
 PORT_PATH = $(AC_PATH)/arch/armv8m
 INCLUDE_DIRS = -I $(PORT_PATH) -I $(AC_PATH) -I $(AC_PATH)/magnesium -I $(AC_PATH)/magnesium/nvic
-PICOTOOL_PATH ?= echo PICOTOOL_PATH is not defined. To get uf2 use picotool
+CMSIS_DIRS = -I. -I CMSIS/Device/RP2350/Include -I CMSIS/Core/Include
+PICOTOOL_PATH ?= echo PICOTOOL_PATH is not defined. To get uf2 use
+CC_FLAGS = -ffreestanding -mcpu=cortex-m33 -Wall -O2
 
+.DEFAULT_GOAL := all
 .PHONY: all clean kernel
 
 %.o : %.c
-	$(GCC_PREFIX)gcc -ffreestanding -mcpu=cortex-m33 -mcmse -mthumb -O2 -DMG_CPU_MAX=2 -DMG_NVIC_PRIO_BITS=4 \
-	-Wall $(INCLUDE_DIRS) -Wl,--build-id=none -I . -I CMSIS/Device/RP2350/Include -I CMSIS/Core/Include \
-	-c -o $@ $<
+	$(GCC_PREFIX)gcc $(CC_FLAGS) -DMG_CPU_MAX=2 -DMG_NVIC_PRIO_BITS=4 -mcmse $(INCLUDE_DIRS) $(CMSIS_DIRS) -c -o $@ $<
 
 %.o : %.s
 	$(GCC_PREFIX)gcc -mcpu=cortex-m33 -mthumb -c -o $@ $<
@@ -18,18 +18,20 @@ PICOTOOL_PATH ?= echo PICOTOOL_PATH is not defined. To get uf2 use picotool
 %.o : $(PORT_PATH)/%.s
 	$(GCC_PREFIX)gcc -mcpu=cortex-m33 -mthumb -c -o $@ $<
 
-app%.task : task%.c 
-	$(GCC_PREFIX)gcc -ffreestanding -Wall -O2  -mcpu=cortex-m33 -mthumb -I $(AC_PATH)/usr/c -I CMSIS/Device/RP2350/Include -I CMSIS/Core/Include -I . -c -o $@.o $<
+app%.rel : task%.c task_startup.o
+	$(GCC_PREFIX)gcc $(CC_FLAGS) -I $(AC_PATH)/usr/c $(CMSIS_DIRS) -c -o $@.o $<
 	$(GCC_PREFIX)ld -nostdlib -r -n -T $(PORT_PATH)/task.ld -o $@ $@.o task_startup.o
 
-all : clean kernel task_startup.o app0.task app1.task
-	$(AC_PATH)/ldgen.sh 0x10000000 0x20000000 $(GCC_PREFIX)
-	$(GCC_PREFIX)ld -n -o image.elf -T ldscript.ld
-	$(PICOTOOL_PATH) uf2 convert --verbose image.elf demo.uf2 --family rp2350-arm-s
-
 kernel : main.o core1.o startup.o traps.o
-	$(GCC_PREFIX)ld -nostdlib -r -n -T rp2350.ld -o kernel.0 main.o core1.o startup.o traps.o
+	$(GCC_PREFIX)ld -nostdlib -r -n -T kernel.ld -o kernel.rel main.o core1.o startup.o traps.o
+
+all : clean kernel app0.rel app1.rel
+	$(AC_PATH)/ldgen.sh $(GCC_PREFIX)size kernel.rel app0.rel app1.rel > memory.ld
+	$(GCC_PREFIX)objcopy --prefix-symbols t0 app0.rel app.task0
+	$(GCC_PREFIX)objcopy --prefix-symbols t1 app1.rel app.task1
+	$(GCC_PREFIX)ld -n -o rp2350.elf -T rp2350.ld kernel.rel app.task0 app.task1
+	$(PICOTOOL_PATH)/picotool uf2 convert --verbose rp2350.elf rp2350.uf2 --family rp2350-arm-s
 
 clean :
-	rm -f *.o *.elf *.0 *.task *.pfx *.uf2 ldscript.ld
+	rm -f *.o *.elf *.rel *.task* *.uf2 memory.ld
 

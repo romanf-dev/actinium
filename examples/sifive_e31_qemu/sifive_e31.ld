@@ -21,10 +21,9 @@ T0_RW_OFFSET = ALIGN(KER_RW_LEN, TASK0_RW_SZ);
 T1_RO_OFFSET = ALIGN(T0_RO_OFFSET + TASK0_RO_SZ, TASK1_RO_SZ);
 T1_RW_OFFSET = ALIGN(T0_RW_OFFSET + TASK0_RW_SZ, TASK1_RW_SZ);
 
-FLASH_BASE = 0x20000000; /* 0x10000000 */
-SRAM_BASE  = 0x20010000; /* 0x20000000 */
+FLASH_BASE = 0x20400000; /* 64k */
+SRAM_BASE = 0x80000000; /* 16k */
 
-/* Each task has its own memory regions. */
 MEMORY {
 	KFLASH (rx) : ORIGIN = FLASH_BASE, LENGTH = KER_RO_LEN
 	KRAM (xrx)  : ORIGIN = SRAM_BASE, LENGTH = KER_RW_LEN
@@ -32,37 +31,30 @@ MEMORY {
 	RAM0 (rwx)  : ORIGIN = SRAM_BASE + T0_RW_OFFSET, LENGTH = TASK0_RW_SZ
 	FLASH1 (rx) : ORIGIN = FLASH_BASE + T1_RO_OFFSET, LENGTH = TASK1_RO_SZ
 	RAM1 (rwx)  : ORIGIN = SRAM_BASE + T1_RW_OFFSET, LENGTH = TASK1_RW_SZ
-    SCRATCH_X(rwx) : ORIGIN = 0x20080000, LENGTH = 4k
-    SCRATCH_Y(rwx) : ORIGIN = 0x20081000, LENGTH = 4k
 }
-
-_estack0 = ORIGIN(SCRATCH_X) + LENGTH(SCRATCH_X);
-_estack1 = ORIGIN(SCRATCH_Y) + LENGTH(SCRATCH_Y);
 
 ENTRY(Reset_Handler)
 
+_estack = SRAM_BASE + 0x4000;
+
 SECTIONS {
 	.text : {
-        PROVIDE(_vector_table = ABSOLUTE(.));
 		*.rel(.text*)
 	} > KFLASH
 
-    _sidata = LOADADDR(.data);
-
 	.data : {
-        . = ALIGN(4);
-        _sdata = .;
+		_data = .;
 		*.rel(.data*)
-        _edata = .;
+		_edata = .; 
 	} > KRAM AT> KFLASH
 
 	.bss : {
-        . = ALIGN(4);
-        _sbss = .;
+        _bss = .;
 		*.rel(.bss*)
-		*.rel(COMMON)
-        _ebss = .;
+		_ebss = .;
 	} > KRAM
+
+	_bss_sz   = _ebss - _bss;
 
 	.text0 : {
 	    *.task0(.text*)
