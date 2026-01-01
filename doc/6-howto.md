@@ -11,27 +11,13 @@ How to use
 - Implement the validation function that maps ids to channel objects.
 - Call ac_kernel_start at end of main().
 
-After code is compiled into relocatables, rename kernel relocatable into kernel.0
-(numeric 0, not O).
 
-Run ldgen.sh script with three parameters as base addresses of flash and SRAM 
-plus toolchain prefix.
-Example for STM32F401:
+Run ldgen.sh script with the following parameters:
 
-        ldgen.sh 0x08000000 0x20000000 arm-none-eabi-
+        ldgen.sh arm-none-eabi-size kernel.o task1.o task2.o ...
 
-Ldgen script treats object files (*.task) in the folder as applications sorted 
-alphabetically. That is the first file in alphabatical order will become actor
-with task_id = 0, second - with task_id = 1, etc. It produces a set of 
-temporary files and ldscript.ld.
-
-Finally, run linker with the ldscript generated at the previous step. Note that
-object files are already mentioned in the script as INPUT, so, don't specify
-anything except the script in the linker command line.
-
-If linker succeeds it creates image containing the kernel and apps that is 
-ready for flashing.
-
+This yields RO/RW sizes for kernel and each task rounded to power of 2. Then use final
+linker script for target board combining all tasks and the kernel into a single image.
 
 
 How to write applications
