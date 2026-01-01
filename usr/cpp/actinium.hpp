@@ -194,7 +194,7 @@ static constexpr auto delay(std::uint32_t t) {
 // Return syscall argument in case when the coroutine requests a blocking
 // call.
 //
-static inline std::uint32_t bind(message_header* msg, std::function<task()> f) {
+static inline std::uint32_t bind(message_header* msg, task (*f)()) {
     static std::coroutine_handle<task::promise_type> s_handle;
     
     if (!s_handle) {
