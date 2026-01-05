@@ -25,7 +25,7 @@ enum {
 
 struct ac_message_t {
     size_t size;
-    uintptr_t padding[2];
+    uintptr_t padding;
     uintptr_t poisoned;
 };
 

@@ -17,7 +17,6 @@
 enum {
     AC_CALL_DELAY,
     AC_CALL_SUBSCRIBE,
-    AC_CALL_LAST_ASYNC = AC_CALL_SUBSCRIBE, /* Only sync syscalls below. */
     AC_CALL_TRY_POP,
     AC_CALL_PUSH,
     AC_CALL_FREE,
@@ -51,12 +50,7 @@ struct ac_actor_t {
     struct ac_port_region_t granted[AC_REGIONS_NUM];
     uintptr_t func;
     bool restart_req;
-
-    struct {
-        struct ac_channel_t* parent;
-        size_t size;
-        int type;
-    } msg;
+    struct ac_channel_t* msg_parent;
 };
 
 struct ac_cpu_context_t {
@@ -69,7 +63,7 @@ struct ac_cpu_context_t {
     } preempted[MG_PRIO_MAX];
 
     struct {
-        uintptr_t addr;
+        uintptr_t top;
         size_t size;
     } stacks[MG_PRIO_MAX];
 };
@@ -86,7 +80,7 @@ struct ac_channel_t {
 _Static_assert(offsetof(struct ac_message_t, header) == 0, "non 1st member");
 _Static_assert(offsetof(struct ac_actor_t, base) == 0, "non 1st member");
 _Static_assert(offsetof(struct ac_channel_t, base) == 0, "non 1st member");
-_Static_assert(sizeof(struct ac_message_t) == sizeof(uintptr_t) * 4, "pad");
+_Static_assert(sizeof(struct ac_message_t) == sizeof(uintptr_t) * 3, "pad");
 
 extern noreturn void ac_kernel_start(void);
 extern void* ac_intr_handler(uint32_t vect, void* frame);
@@ -119,7 +113,7 @@ static inline void ac_context_stack_set(unsigned prio, size_t sz, void* ptr) {
     struct ac_cpu_context_t* const context = AC_GET_CONTEXT();
     assert((sz & (sz - 1)) == 0);
     assert(sz > sizeof(struct ac_port_frame_t));
-    context->stacks[prio].addr = (uintptr_t) ptr;
+    context->stacks[prio].top = (uintptr_t) ptr + sz;
     context->stacks[prio].size = sz;
 }
 
@@ -148,27 +142,23 @@ static inline void ac_channel_init(struct ac_channel_t* chan, int msg_type) {
 
 static inline void _ac_message_bind(struct ac_actor_t* actor) {
     struct ac_message_t* const msg = (void*) actor->base.mailbox;
-    const bool not_bound = actor->msg.parent == 0;
+    const bool not_bound = actor->msg_parent == 0;
 
     if (msg && not_bound) {
         struct ac_channel_t* const parent = (void*) msg->header.parent;
         struct ac_port_region_t* const region = &actor->granted[AC_REGION_MSG];       
-        actor->msg.parent = parent;
-        actor->msg.type = parent->msg_type;
-        actor->msg.size = parent->base.block_sz;
-        msg->size = actor->msg.size;
-        ac_port_region_init(region, (uintptr_t)msg, actor->msg.size, AC_ATTR_RW);
+        actor->msg_parent = parent;
+        msg->size = parent->base.block_sz;
+        ac_port_region_init(region, (uintptr_t)msg, msg->size, AC_ATTR_RW);
     }
 }
 
 static inline void _ac_message_unbind(struct ac_actor_t* actor) {
     struct ac_message_t* const msg = (void*) actor->base.mailbox;
     assert(msg != 0);
-    msg->header.parent = &actor->msg.parent->base;
+    msg->header.parent = &actor->msg_parent->base;
     actor->base.mailbox = 0;
-    actor->msg.parent = 0;
-    actor->msg.type = 0;
-    actor->msg.size = 0;
+    actor->msg_parent = 0;
     ac_port_region_init(&actor->granted[AC_REGION_MSG], 0, 0, AC_ATTR_RW);
 }
 
@@ -188,7 +178,7 @@ static inline void _ac_channel_push(
 ) {
     struct ac_message_t* const msg = (void*) src->base.mailbox;
 
-    if (msg && (src->msg.type == dst->msg_type)) {
+    if (msg && (src->msg_parent->msg_type == dst->msg_type)) {
         msg->poisoned = 0;
         _ac_message_unbind(src);
         mg_queue_push(&dst->base.queue, &msg->header);
@@ -211,10 +201,7 @@ static inline void ac_actor_init(
     mg_actor_init(&actor->base, 0, vect, 0); /* Null func means usermode. */
     actor->func = descr->flash_addr;
     actor->restart_req = true;
-    actor->msg.parent = 0;
-    actor->msg.size = 0;
-    actor->msg.type = 0;
-
+    actor->msg_parent = 0;
     struct ac_cpu_context_t* const context = AC_GET_CONTEXT();
 
     ac_port_region_init(
@@ -229,10 +216,11 @@ static inline void ac_actor_init(
         descr->sram_size, 
         AC_ATTR_RW
     );
+    const unsigned int prio = actor->base.prio;
     ac_port_region_init(
         &regions[AC_PORT_REGION_STACK], 
-        context->stacks[actor->base.prio].addr, 
-        context->stacks[actor->base.prio].size, 
+        context->stacks[prio].top - context->stacks[prio].size,
+        context->stacks[prio].size, 
         AC_ATTR_RW
     );
     ac_port_region_init(&regions[AC_REGION_MSG], 0, 0, AC_ATTR_RW);
@@ -259,12 +247,10 @@ static inline struct ac_port_frame_t* _ac_frame_create(
 ) {
     const struct ac_cpu_context_t* const context = AC_GET_CONTEXT();
     const unsigned int prio = actor->base.prio;
-    const uintptr_t base = context->stacks[prio].addr;
-    const size_t size = context->stacks[prio].size;
-    const uintptr_t stack_top = base + size;
+    const uintptr_t stack_top = context->stacks[prio].top;
     const bool restart_req = actor->restart_req;
     actor->restart_req = false;
-    assert(base != 0);
+    assert(stack_top != 0);
     return ac_port_frame_alloc(stack_top, actor->func, restart_req);
 }
 
@@ -342,22 +328,22 @@ static inline struct ac_port_frame_t* ac_actor_exception(void) {
     assert(me != 0);
     _ac_message_release(me, true);
     ac_actor_error(me);
-
     return _ac_frame_restore_prev();
 }
 
-static inline void _ac_sys_timeout(struct ac_actor_t* actor, uintptr_t req) {
+static inline bool _ac_sys_timeout(struct ac_actor_t* actor, uintptr_t req) {
     actor->base.timeout = (uint32_t) req;
 
     if (req) {
         _mg_actor_timeout(&actor->base);
-    } else {
-        _mg_actor_activate(&actor->base);
     }
+
+    return (req != 0);
 }
 
-static inline void _ac_sys_subscribe(struct ac_actor_t* actor, uintptr_t req) {
+static inline bool _ac_sys_subscribe(struct ac_actor_t* actor, uintptr_t req) {
     struct ac_channel_t* const chan = ac_channel_validate(actor, req, false);
+    bool is_async = true;
 
     if (chan) {
         _ac_message_release(actor, false);
@@ -369,9 +355,13 @@ static inline void _ac_sys_subscribe(struct ac_actor_t* actor, uintptr_t req) {
 
         if (msg) {
             actor->base.mailbox = &msg->header;
-            _mg_actor_activate(&actor->base);
+            _ac_message_bind(actor);
+            ac_port_update_region(AC_REGION_MSG, &actor->granted[AC_REGION_MSG]);
+            is_async = false;
         }
     }
+
+    return is_async;
 }
 
 static inline void _ac_sys_push(struct ac_actor_t* actor, uintptr_t req) {
@@ -408,14 +398,15 @@ static inline struct ac_port_frame_t* _ac_svc_handler(
     struct ac_port_frame_t* frame = prev_frame;
     const uint32_t opcode = syscall >> 28;
     const uint32_t arg = syscall & UINT32_C(0x0fffffff);
+    bool is_async = false;
 
     if (opcode < AC_CALL_MAX) {
         switch (opcode) {
         case AC_CALL_DELAY: 
-            _ac_sys_timeout(actor, arg);
+            is_async = _ac_sys_timeout(actor, arg);
             break;
         case AC_CALL_SUBSCRIBE: 
-            _ac_sys_subscribe(actor, arg); 
+            is_async = _ac_sys_subscribe(actor, arg); 
             break;
         case AC_CALL_TRY_POP:
             _ac_sys_trypop(actor, arg);
@@ -428,10 +419,10 @@ static inline struct ac_port_frame_t* _ac_svc_handler(
             break;
         }
 
-        if (opcode > AC_CALL_LAST_ASYNC) {
-            ac_port_frame_set_arg(frame, actor->base.mailbox);
-        } else {
+        if (is_async) {
             frame = _ac_frame_restore_prev();
+        } else {
+            ac_port_frame_set_arg(frame, actor->base.mailbox);
         }
     } else {
         frame = ac_actor_exception();

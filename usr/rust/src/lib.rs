@@ -26,7 +26,7 @@ const SC_MSG_FREE: u32 = 4 << 28;
 #[repr(C)]
 struct MsgHeader {
     size: u32,
-    _padding: [u32; 2],
+    _padding: u32,
     poisoned: u32
 }
 

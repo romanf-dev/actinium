@@ -24,7 +24,7 @@ void* task::promise_type::alloc(std::size_t n) {
 //
 struct led_control {
     std::uint32_t control;
-    std::uint32_t padding[3]; 
+    std::uint32_t padding[4]; 
 };
       
 //

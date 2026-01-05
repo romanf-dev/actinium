@@ -17,11 +17,11 @@ class message_header {
 
 protected:
     std::uintptr_t size;
-    std::uintptr_t padding[2];
+    std::uintptr_t padding;
     std::uintptr_t poisoned;
 };
 
-static_assert(sizeof(message_header) == 16);
+static_assert(sizeof(message_header) == 12);
 
 enum syscall_id {
     DELAY =     0 << 28,

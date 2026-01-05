@@ -26,7 +26,7 @@ struct ac_channel_t* ac_channel_validate(
 
 struct demo_msg_t {
     struct ac_message_t header;
-    uint32_t foo[8];
+    uint32_t foo[9];
 };
 
 _Static_assert(sizeof(struct demo_msg_t) == 64, "wrong msg size");
