@@ -1,25 +1,39 @@
 Black pill example
 ==================
 
-This example demonstrates two tasks: blinker and sender. The sender sends 
-messages to a channel every second. The blinker controls the LED.
-Both tasks crash periodically due to invalid memory references, but they're
-restarted by the OS and the system continues to work.
-
-Use 
+The demo contains two tasks: sender and controller. The 'sender' sends
+requests to toggle LED to 'controller' who has access to the corresponding 
+peripheral. Both tasks crash periodically after few activations but they're
+restarted by exceptions and the system continues to work.
+This demonstrates 'let it crash' principle: even when no task is reliable 
+the whole system works as designed.
+To build the demo run
 
         make
 
-to build the example. By default it uses both tasks implemented in C in
-task0/task1 files. To use C++ or Rust examples in separate folder use
-either (or both)
+in the demo folder (provided that arm-none-eabi- toolchain is available via 
+PATH). This yields image.elf file containing all the tasks and the kernel
+ready for flashing.
 
-        make cpp_example
+Original tasks (task0.c and task1.c) are simple and written in C. However,
+since actors are inherently 'async' writing them in C requres some efforts
+because of no async/await functionality in the language. 
 
-or
+There are two demo modifications: 'sender' in C++20 and 'controller' in Rust.
+
+Modified controller interprets 'LED on' and 'LED off' messages as 'blink once' 
+and 'blink  twice' so it is visually distinguishable from C demo. 
+To build the demo modification run:
 
         make rust_example
 
-and then call 'make' again. Then the corresponding app will be replaced
-by alternative implementation in different language.
+and/or: 
+
+        make cpp_example
+
+Then run:
+
+        make
+
+To build the executable image with modified tasks.
 
