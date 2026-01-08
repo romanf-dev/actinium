@@ -31,15 +31,6 @@ internal_vectors:
 .word       0
 .word       ac_port_mei_handler
 
-/*
- * Callee-saved registers are preserved here before the switch to U-mode.
- * Task binaries may use these registers freely.
- */
-.section .bss
-
-kregs:
-.long 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
-
 .section .text
 .align 4
 
@@ -70,24 +61,6 @@ from_umode:
     sw      gp,  19*4(sp)
     csrrw   s0, mscratch, zero      /* s0 = top of user stack */
     sw      s0,  18*4(sp)
-.option push
-.option norelax
-    la      s11, kregs              /* load preserved kernel registers */
-    lw      gp,  0*4(s11)
-.option pop
-    lw      tp,  1*4(s11)
-    lw      s0,  2*4(s11)
-    lw      s1,  3*4(s11)
-    lw      s2,  4*4(s11)
-    lw      s3,  5*4(s11)
-    lw      s4,  6*4(s11)
-    lw      s5,  7*4(s11)
-    lw      s6,  8*4(s11)
-    lw      s7,  9*4(s11)
-    lw      s8,  10*4(s11)
-    lw      s9,  11*4(s11)
-    lw      s10, 12*4(s11)
-    lw      s11, 13*4(s11)
 save_frame:                         /* save volatile registers */
     sw      t6, 17*4(sp)
     sw      t5, 16*4(sp)
@@ -156,21 +129,6 @@ context_restore:                    /* a0 points to context, MIE = 0 */
 to_umode:
     csrw    mscratch, sp            /* save top of kernel stack to mscratch */
     mv      sp, a0
-    la      a0, kregs               /* preserve kernel regs using x30-31 */
-    sw      gp,  0*4(a0)
-    sw      tp,  1*4(a0)
-    sw      s0,  2*4(a0)
-    sw      s1,  3*4(a0)
-    sw      s2,  4*4(a0)
-    sw      s3,  5*4(a0)
-    sw      s4,  6*4(a0)
-    sw      s5,  7*4(a0)
-    sw      s6,  8*4(a0)
-    sw      s7,  9*4(a0)
-    sw      s8,  10*4(a0)
-    sw      s9,  11*4(a0)
-    sw      s10, 12*4(a0)
-    sw      s11, 13*4(a0)
     lw      t0,  3*4(sp)            /* load scratch registers a0/t0 */
     lw      a0,  6*4(sp)
     lw      s11, 32*4(sp)           /* load user's persistent regs */
