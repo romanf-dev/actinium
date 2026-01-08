@@ -33,7 +33,7 @@ target_include_directories(kernel.rel PRIVATE
 )
 target_compile_definitions(kernel.rel PRIVATE MG_CPU_MAX=2)
 target_compile_options(kernel.rel PRIVATE -march=rv32ima_zicsr_zbb)
-target_link_options(kernel.rel PRIVATE -nostdlib -Wl,-r -Wl,-n -T ${PROJECT_DIR}/kernel.ld)
+target_link_options(kernel.rel PRIVATE -Wl,--no-relax-gp -nostdlib -Wl,-r -Wl,-n -T ${PROJECT_DIR}/kernel.ld)
 
 # Task startup contains initialization code and has to be placed first inside the task binary.
 add_library(task_startup OBJECT ${PORT_DIR}/task_startup.s)
@@ -48,7 +48,7 @@ target_include_directories(blinker.rel PRIVATE
     ${CMAKE_SOURCE_DIR}
 )
 target_link_libraries(blinker.rel $<TARGET_OBJECTS:task_startup>)
-target_link_options(blinker.rel PRIVATE -nostdlib -Wl,-r -Wl,-n -T ${PORT_DIR}/task.ld)
+target_link_options(blinker.rel PRIVATE -Wl,--no-relax-gp -nostdlib -Wl,-r -Wl,-n -T ${PORT_DIR}/task.ld)
 add_custom_command(TARGET blinker.rel POST_BUILD
     COMMAND ${CMAKE_OBJCOPY} --prefix-symbols t0 blinker.rel blinker.task0
     COMMENT "Generating blinker task..."
@@ -60,7 +60,7 @@ add_executable(sender.rel task1.c)
 add_dependencies(sender.rel task_startup)
 target_compile_options(sender.rel PRIVATE -march=rv32i)
 target_link_libraries(sender.rel $<TARGET_OBJECTS:task_startup>)
-target_link_options(sender.rel PRIVATE -nostdlib -Wl,-r -Wl,-n -T ${PORT_DIR}/task.ld)
+target_link_options(sender.rel PRIVATE -Wl,--no-relax-gp -nostdlib -Wl,-r -Wl,-n -T ${PORT_DIR}/task.ld)
 target_include_directories(sender.rel PRIVATE 
     ${AC_DIR}/usr/c
     ${CMAKE_SOURCE_DIR}

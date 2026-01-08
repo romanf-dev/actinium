@@ -18,7 +18,7 @@ PICOTOOL_PATH ?= echo PICOTOOL_PATH is not defined. To get uf2 use picotool
 
 app%.rel : task%.c task_startup.o
 	$(GCC_PREFIX)gcc -ffreestanding -Wall -O2 -march=rv32i -I $(AC_PATH)/usr/c -I . -c -o $@.o $<
-	$(GCC_PREFIX)ld -nostdlib -r -n -T $(PORT_PATH)/task.ld -o $@ $@.o task_startup.o
+	$(GCC_PREFIX)ld --no-relax-gp -nostdlib -r -n -T $(PORT_PATH)/task.ld -o $@ $@.o task_startup.o
 
 all : clean kernel app0.rel app1.rel
 	$(AC_PATH)/ldgen.sh $(GCC_PREFIX)size kernel.rel app0.rel app1.rel > memory.ld
@@ -28,7 +28,7 @@ all : clean kernel app0.rel app1.rel
 	$(PICOTOOL_PATH)/picotool uf2 convert --verbose rp2350.elf rp2350.uf2 --family 0xe48bff5a
 
 kernel : main.o core1.o startup.o traps.o
-	$(GCC_PREFIX)ld -nostdlib -r -n -T kernel.ld -o kernel.rel main.o core1.o startup.o traps.o
+	$(GCC_PREFIX)ld --no-relax-gp -nostdlib -r -n -T kernel.ld -o kernel.rel main.o core1.o startup.o traps.o
 
 clean :
 	rm -f *.o *.elf *.rel *.task* *.uf2 memory.ld
