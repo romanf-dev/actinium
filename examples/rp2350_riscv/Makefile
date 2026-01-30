@@ -1,7 +1,7 @@
 GCC_PREFIX ?= riscv32-unknown-elf-
 AC_PATH ?= ../..
 PORT_PATH = $(AC_PATH)/arch/rv32
-INCLUDE_DIRS = -I $(PORT_PATH) -I $(AC_PATH) -I $(AC_PATH)/magnesium
+INCLUDE_DIRS = -I $(PORT_PATH) -I $(AC_PATH) -I $(AC_PATH)/magnesium -I $(AC_PATH)/magnesium/rv32
 PICOTOOL_PATH ?= echo PICOTOOL_PATH is not defined. To get uf2 use picotool
 
 .PHONY: all clean kernel
@@ -27,8 +27,8 @@ all : clean kernel app0.rel app1.rel
 	$(GCC_PREFIX)ld --no-relax-gp -n -o rp2350.elf -T rp2350.ld kernel.rel blinker.task0 sender.task1
 	$(PICOTOOL_PATH)/picotool uf2 convert --verbose rp2350.elf rp2350.uf2 --family 0xe48bff5a
 
-kernel : main.o core1.o startup.o traps.o
-	$(GCC_PREFIX)ld --no-relax-gp -nostdlib -r -n -T kernel.ld -o kernel.rel main.o core1.o startup.o traps.o
+kernel : main.o port.o core1.o startup.o traps.o
+	$(GCC_PREFIX)ld --no-relax-gp -nostdlib -r -n -T kernel.ld -o kernel.rel main.o port.o core1.o startup.o traps.o
 
 clean :
 	rm -f *.o *.elf *.rel *.task* *.uf2 memory.ld

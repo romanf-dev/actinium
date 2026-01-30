@@ -21,7 +21,7 @@ set(PROJECT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(AC_DIR ${PROJECT_DIR}/../../)
 set(PORT_DIR ${AC_DIR}/arch/rv32)
 
-set(KERNEL_SOURCES main.c core1.c startup.s ${PORT_DIR}/traps.s)
+set(KERNEL_SOURCES main.c port.c core1.c startup.s ${PORT_DIR}/traps.s)
 
 # Privileged code is compiled into separate relocatable binary kernel.rel.
 add_executable(kernel.rel ${KERNEL_SOURCES})
@@ -29,6 +29,7 @@ target_include_directories(kernel.rel PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${AC_DIR}
     ${AC_DIR}/magnesium/
+    ${AC_DIR}/magnesium/rv32/
     ${PORT_DIR}
 )
 target_compile_definitions(kernel.rel PRIVATE MG_CPU_MAX=2)

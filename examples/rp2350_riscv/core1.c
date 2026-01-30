@@ -47,7 +47,7 @@ static inline uint32_t multicore_fifo_pop_blocking(void) {
     return sio_hw->fifo_rd;
 }
 
-void core1_start(void (*entry)(void), uintptr_t mtvec, uintptr_t stack) {
+void rp2350_core1_start(void (*entry)(void), uintptr_t mtvec, uintptr_t stack) {
     const uint32_t cmd_sequence[] = {0, 0, 1, mtvec, stack, (uintptr_t) entry};
     const size_t n = sizeof(cmd_sequence) / sizeof(cmd_sequence[0]);
     unsigned int seq = 0;
