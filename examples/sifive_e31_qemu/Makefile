@@ -1,13 +1,13 @@
 GCC_PREFIX ?= riscv32-unknown-elf-
 AC_PATH ?= ../..
 PORT_PATH = $(AC_PATH)/arch/rv32
-INCLUDE_DIRS = -I $(PORT_PATH) -I $(AC_PATH) -I $(AC_PATH)/magnesium
+INCLUDE_DIRS = -I $(PORT_PATH) -I $(AC_PATH) -I $(AC_PATH)/magnesium -I $(AC_PATH)/magnesium/rv32
 
 .PHONY: all clean kernel
 .DEFAULT_GOAL := all
 
 %.o: %.c
-	$(GCC_PREFIX)gcc -ffreestanding -Wall -O2 -march=rv32izicsr $(INCLUDE_DIRS) -I . -c -o $@ $<
+	$(GCC_PREFIX)gcc -ffreestanding -DMG_SW_CLZ -Wall -O2 -march=rv32izicsr $(INCLUDE_DIRS) -I . -c -o $@ $<
 
 %.o: $(PORT_PATH)/%.s
 	$(GCC_PREFIX)gcc -march=rv32izicsr -c -o $@ $<
