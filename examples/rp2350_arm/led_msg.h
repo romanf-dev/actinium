@@ -11,7 +11,7 @@
 struct led_msg_t {
     struct ac_message_t header;
     unsigned int control;
-    unsigned int padding[3];
+    unsigned int padding[4];
 };
 
 _Static_assert(sizeof(struct led_msg_t) == 32, "wrong msg size");
