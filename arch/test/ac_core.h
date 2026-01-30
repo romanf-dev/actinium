@@ -14,8 +14,15 @@
 #include <setjmp.h>
 #include "actinium.h"
 
-struct ac_gpic_t g_pic;
+#define AC_GPIC_REQUEST(set) { extern unsigned g_req; g_req = (set); }
+#include "ac_gpic.h"
+
 unsigned g_req;
+static struct ac_gpic_t g_pic;
+
+void pic_interrupt_request(unsigned cpu, unsigned vect) {
+    ac_gpic_request(&g_pic, vect);
+}
 
 void* _ac_syscall(unsigned arg);
 
