@@ -141,8 +141,8 @@ int main(void) {
     // Create global objects, 1 is used as unique type id, any value may be used.
     //
     static alignas(sizeof(struct led_msg_t)) struct led_msg_t g_storage[3];
-    ac_channel_init_ex(&g_chan[0], sizeof(g_storage), g_storage, sizeof(g_storage[0]), 1);
-    ac_channel_init(&g_chan[1], 1);
+    ac_channel_init_ex(&g_chan[0], sizeof(g_storage), g_storage, sizeof(g_storage[0]));
+    ac_channel_init(&g_chan[1]);
 
     // 
     // Use 8 priority levels, so five subpriority bits are 4:0.

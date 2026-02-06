@@ -162,14 +162,14 @@ int main(void) {
     ac_context_stack_set(3, sizeof(stack1), stack1);
 
     static alignas(sizeof(struct usb_msg_t)) struct usb_msg_t g_usb_msgs[3];
-    ac_channel_init_ex(&g_chan[CHAN_USB_POOL], sizeof(g_usb_msgs), g_usb_msgs, sizeof(g_usb_msgs[0]), 1);
-    ac_channel_init(&g_chan[CHAN_USB_SERVER_IN], 1);
-    ac_channel_init(&g_chan[CHAN_USB_SERVER_PRIV], 1);
-    ac_channel_init(&g_chan[CHAN_USB_SERVER_OUT], 1);
+    ac_channel_init_ex(&g_chan[CHAN_USB_POOL], sizeof(g_usb_msgs), g_usb_msgs, sizeof(g_usb_msgs[0]));
+    ac_channel_init(&g_chan[CHAN_USB_SERVER_IN]);
+    ac_channel_init(&g_chan[CHAN_USB_SERVER_PRIV]);
+    ac_channel_init(&g_chan[CHAN_USB_SERVER_OUT]);
 
     static alignas(sizeof(struct led_msg_t)) struct led_msg_t g_led_msgs[1];
-    ac_channel_init_ex(&g_chan[CHAN_APP_POOL], sizeof(g_led_msgs), g_led_msgs, sizeof(g_led_msgs[0]), 2);
-    ac_channel_init(&g_chan[CHAN_LED_SERVER_IN], 2);
+    ac_channel_init_ex(&g_chan[CHAN_APP_POOL], sizeof(g_led_msgs), g_led_msgs, sizeof(g_led_msgs[0]));
+    ac_channel_init(&g_chan[CHAN_LED_SERVER_IN]);
 
     static struct ac_actor_t g_usb_server;
     ac_actor_init(&g_usb_server, 0, descr_by_id(0));

@@ -111,8 +111,8 @@ noreturn int main(void) {
     ac_context_stack_set(0, sizeof(stack0), stack0);
 
     static alignas(sizeof(struct led_msg_t)) struct led_msg_t g_storage[3];
-    ac_channel_init_ex(&g_chan[0], sizeof(g_storage), g_storage, sizeof(g_storage[0]), 1);
-    ac_channel_init(&g_chan[1], 1);
+    ac_channel_init_ex(&g_chan[0], sizeof(g_storage), g_storage, sizeof(g_storage[0]));
+    ac_channel_init(&g_chan[1]);
 
     static struct ac_actor_t g_handler;
     ac_actor_init(&g_handler, SPARE_IRQ_MIN, descr_by_id(0));

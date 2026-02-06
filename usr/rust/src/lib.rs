@@ -10,11 +10,12 @@ pub mod task {
 
 use core::mem;
 use core::ptr;
+use core::ptr::{ NonNull };
 use core::marker::PhantomData;
 use core::pin::Pin;
 use core::future::Future;
 use core::task::{Poll, Context, RawWakerVTable, RawWaker, Waker};
-use core::cell::{Cell, UnsafeCell};
+use core::cell::{ UnsafeCell };
 use core::ops::{Deref, DerefMut};
  
 const SC_DELAY: u32 = 0 << 28;
@@ -40,14 +41,10 @@ struct Msg<T> {
     payload: T
 }
 
-unsafe fn msg_typecast<'a, T: Send>(ptr: *mut MsgHeader) -> &'a mut Msg<T> {
-    let msg = &mut *(ptr as *mut MsgHeader);
-    if msg.size as usize == mem::size_of::<Msg<T>>() {
-        let msg = &mut *(ptr as *mut Msg<T>);
-        msg
-    } else {
-        panic!("mismatched msg sizes");
-    }
+unsafe fn msg_typecast<'a, T: Send>(ptr: NonNull<MsgHeader>) -> &'a mut Msg<T> {
+    let size = ptr.cast::<u32>().read() as usize;
+    assert!(size == mem::size_of::<Msg<T>>());
+    ptr.cast::<Msg<T>>().as_mut()
 }
 
 pub struct Token();
@@ -116,12 +113,9 @@ impl<T: Sized + Send> RecvChannel<T> {
     
     pub fn try_pop(&self, token: Token) -> Result<Envelope<T>, Token> {
         let ptr = unsafe { _ac_syscall(SC_CHAN_POLL | self.id) };
-        if !ptr.is_null() {
-            let msg = unsafe { msg_typecast::<T>(ptr) };
-            Ok(Envelope::new(msg))
-        } else {
-            Err(token)
-        }
+        let msg = NonNull::new(ptr).map(|p| unsafe { msg_typecast::<T>(p) });
+        let env = msg.map(Envelope::new);
+        env.ok_or(token)
     }
     
     pub async fn pop(&self, _token: Token) -> Envelope<T> {
@@ -130,37 +124,96 @@ impl<T: Sized + Send> RecvChannel<T> {
 }
 
 enum Mailbox {
-    Message(*mut MsgHeader),
+    Message(NonNull<MsgHeader>),
     Subscription(u32),
     MessageWaiting
 }
 
-struct Global<T> {
-    data: Cell<Option<T>>
-}
-
-impl<T> Global<T> {
-    const fn new() -> Global<T> {
-        Global { 
-            data: Cell::new(None) 
-        }
-    }
-}
-
-unsafe impl<T> Sync for Global<T> {}
-
-static IPC: Global<Mailbox> = Global::new();
+static mut IPC: Mailbox = Mailbox::MessageWaiting;
 
 impl<T: Sized + Send> Future for &RecvChannel<T> {
     type Output = Envelope<T>;
     fn poll(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
-        if let Some(Mailbox::Message(ptr)) = IPC.data.take() {
-            let msg = unsafe { msg_typecast::<T>(ptr) };
-            Poll::Ready(Envelope::new(msg))
-        } else {
-            IPC.data.set(Some(Mailbox::Subscription(self.id | SC_CHAN_POP)));
-            Poll::Pending
+        unsafe {
+            if let Mailbox::Message(ptr) = IPC {
+                let msg = msg_typecast::<T>(ptr);
+                Poll::Ready(Envelope::new(msg))
+            } else {
+                IPC = Mailbox::Subscription(self.id | SC_CHAN_POP);
+                Poll::Pending
+            }
         }
+    }
+}
+
+pub struct HeaderPtr {
+    ptr: NonNull<MsgHeader>
+}
+
+impl HeaderPtr {
+    fn new(ptr: NonNull<MsgHeader>) -> Self {
+        Self {
+            ptr
+        }
+    }
+
+    pub unsafe fn read<T: Send + Sized + Copy + 'static>(&self) -> T {
+        let msg = self.ptr.cast::<Msg<T>>().as_ptr();
+        (*msg).payload
+    }
+    
+    pub fn free(self) -> Token {
+        mem::forget(self);
+        unsafe {
+            _ac_syscall(SC_MSG_FREE);
+        }
+        Token::new()
+    }
+    
+    pub unsafe fn convert<T: Send + Sized + 'static>(self) -> Envelope<T> {
+        let msg =  msg_typecast(self.ptr);
+        Envelope::new(msg)
+    }
+}
+
+pub struct RawRecvChannel {
+    id: u32
+}
+
+impl RawRecvChannel {
+    pub const fn new(id: u32) -> Self {
+        Self {
+            id
+        }
+    }
+    
+    pub fn try_pop(&self, token: Token) -> Result<HeaderPtr, Token> {
+        let ptr = unsafe { _ac_syscall(SC_CHAN_POLL | self.id) };
+        NonNull::new(ptr).map(HeaderPtr::new).ok_or(token)
+    }
+    
+    pub async fn pop(&self, _token: Token) -> HeaderPtr {
+        self.await
+    }
+}
+
+impl Future for &RawRecvChannel {
+    type Output = HeaderPtr;
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
+        unsafe {
+            if let Mailbox::Message(ptr) = IPC {
+                Poll::Ready(HeaderPtr::new(ptr))
+            } else {
+                IPC = Mailbox::Subscription(self.id | SC_CHAN_POP);
+                Poll::Pending
+            }
+        }
+    }
+}
+
+impl Drop for HeaderPtr {
+    fn drop(&mut self) {
+        panic!("dropped msg");
     }
 }
 
@@ -198,7 +251,9 @@ impl Future for Timer {
     type Output = ();
     fn poll(mut self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Self::Output> {
         if self.delay > 0 {
-            IPC.data.set(Some(Mailbox::Subscription(self.delay | SC_DELAY)));
+            unsafe {
+                IPC = Mailbox::Subscription(self.delay | SC_DELAY);
+            }
             self.delay = 0;
             Poll::Pending
         } else {
@@ -246,24 +301,22 @@ impl<const N: usize, const A: usize> FutureStorage<N, A> {
     }
 }
 
-pub fn call<F: Future + 'static>(ptr: *mut (), f: impl FnOnce(Token) -> F) -> u32 {
+pub unsafe fn call<F: Future + 'static>(ptr: *mut (), f: impl FnOnce(Token) -> F) -> u32 {
     const VTABLE: RawWakerVTable = RawWakerVTable::new(
         |_| { RawWaker::new(ptr::null(), &VTABLE) }, |_| {}, |_| {}, |_| {}
     );
 
     let raw_waker = RawWaker::new(ptr::null(), &VTABLE);
-    let waker = unsafe { Waker::from_raw(raw_waker) };
+    let waker = Waker::from_raw(raw_waker);
     let mut cx = Context::from_waker(&waker);
     
-    unsafe {
-        let future = cast_to(ptr, f);
-        let mut pinned = Pin::new_unchecked(future);
-        let _ = pinned.as_mut().poll(&mut cx);
-    }
-    
-    if let Some(Mailbox::Subscription(syscall)) = IPC.data.take() {
+    let future = cast_to(ptr, f);
+    let mut pinned = Pin::new_unchecked(future);
+    let _ = pinned.as_mut().poll(&mut cx);
+
+    if let Mailbox::Subscription(syscall) = IPC {
         if (syscall >> 28) != 0 {
-            IPC.data.set(Some(Mailbox::MessageWaiting));
+            IPC = Mailbox::MessageWaiting;
         }
         syscall
     } else {
@@ -272,23 +325,27 @@ pub fn call<F: Future + 'static>(ptr: *mut (), f: impl FnOnce(Token) -> F) -> u3
 }
 
 pub fn msg_input(msg: *mut ()) {
-    if !msg.is_null() {
-        if IPC.data.take().is_some() {
-            IPC.data.set(Some(Mailbox::Message(msg as *mut MsgHeader)));
+    unsafe {
+        if !msg.is_null() {
+            let ptr = NonNull::new_unchecked(msg as *mut MsgHeader);
+            IPC = Mailbox::Message(ptr);
         }
     }
 }
 
 pub fn call_once(f: impl FnOnce(Token) -> *mut ()) -> *mut () {
-    static INIT: Global<()> = Global::new();
-    static FUT_PTR: Global<*mut ()> = Global::new();
+    static mut INIT: bool = false;
+    static mut FUT_PTR: *mut () = ptr::null_mut();
     
-    if INIT.data.get().is_none() {
-        let ptr = f(Token::new());
-        FUT_PTR.data.set(Some(ptr));
-        INIT.data.set(Some(()));
+    unsafe {
+        if !INIT{
+            let ptr = f(Token::new());
+            FUT_PTR = ptr;
+            INIT = true;
+        }
+
+        FUT_PTR
     }
-    FUT_PTR.data.get().unwrap()
 }
 
 #[macro_export]
@@ -303,7 +360,7 @@ macro_rules! bind {
 
         msg_input($msg);
         let ptr = call_once(|token| { unsafe { DATA.write($task(token)) } });
-        let syscall = call(ptr, $task);
+        let syscall = unsafe { call(ptr, $task) };
         syscall
     }}
 }

@@ -74,7 +74,6 @@ struct ac_context_t {
 
 struct ac_channel_t {
     struct mg_message_pool_t base;
-    int msg_type; /* Unique id of the message type. */
 };
 
 _Static_assert(offsetof(struct ac_message_t, header) == 0, "non 1st member");
@@ -121,23 +120,20 @@ static inline void ac_channel_init_ex(
     struct ac_channel_t* chan, 
     size_t total_len,
     void* mem,
-    size_t block_sz,
-    int msg_type
+    size_t block_sz
 ) {
     assert((block_sz & (block_sz - 1)) == 0);
     assert((((uintptr_t)mem) & (block_sz - 1)) == 0);
-    assert(msg_type != 0);
     mg_queue_init(&chan->base.queue);
     chan->base.array = mem;
     chan->base.total_length = total_len;
     chan->base.block_sz = block_sz;
     chan->base.offset = 0;
     chan->base.array_space_available = (total_len != 0);
-    chan->msg_type = msg_type;
 }
 
-static inline void ac_channel_init(struct ac_channel_t* chan, int msg_type) {
-    ac_channel_init_ex(chan, 0, 0, 0, msg_type);
+static inline void ac_channel_init(struct ac_channel_t* chan) {
+    ac_channel_init_ex(chan, 0, 0, 0);
 }
 
 static inline void _ac_message_bind(struct ac_actor_t* actor) {
@@ -178,7 +174,7 @@ static inline void _ac_channel_push(
 ) {
     struct ac_message_t* const msg = (void*) src->base.mailbox;
 
-    if (msg && (src->msg_parent->msg_type == dst->msg_type)) {
+    if (msg) {
         msg->poisoned = 0;
         _ac_message_unbind(src);
         mg_queue_push(&dst->base.queue, &msg->header);

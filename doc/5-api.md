@@ -45,25 +45,17 @@ Extended API for channels specifies memory pool for initial message
 allocations. When a message is allocated from such channel the latter
 is set as the message parent. Freeing message always puts it into the
 parent channel despite any further owners of the message.
-Msg type is used for exact message type identification to avoid 
-message posting into a wrong channel. Types must match in any channels 
-which are used to hold the same message type. The type itself is any 
-nonzero integer.
 
         void ac_channel_init_ex(
             struct ac_channel_t* chan, 
             size_t total_length,
             void* ptr,
-            size_t block_size,
-            int msg_type
+            size_t block_size
         );
 
 Default channel with no associated memory. Cannot be message parent.
 
-        void ac_channel_init(
-            struct ac_channel_t* chan, 
-            int msg_type
-        );
+        void ac_channel_init(struct ac_channel_t* chan);
 
 Actor initialization. Task descriptor is a struct describing actor 
 memory: flash and SRAM base address and size.
@@ -163,11 +155,11 @@ Message ownership is represented as Envelope which hides underlying raw pointer.
 
         struct Envelope<T>
 
-Please note that generic message type contains 16-byte header, so T type 
+Please note that generic message type contains 12-byte header, so T type 
 must have such a size to make the whole message power-of-2-sized. 
 For example if your message payload is 4-bytes long you have to include 
-explicit 12-bytes padding in order to get 32-bytes message 
-(16 bytes header + 4 bytes payload + 12 bytes padding).
+explicit 16-bytes padding in order to get 32-bytes message 
+(12 bytes header + 4 bytes payload + 16 bytes padding).
 This is the MPU hardware restriction and is required for all ARMv7-M chips.
 
 Messages should never be dropped implicitly. Dropping of a message causes
@@ -204,7 +196,9 @@ Methods:
 
 ### SendChannel
 
-Channel for sending.
+Channel for sending. If some channel allows different message types then
+it is possible to have multiple SendChannel objects with different types
+but with the same id.
 
         struct SendChannel<T>
 
@@ -212,4 +206,27 @@ Methods:
 
         const fn new(id: u32) -> Self
         fn send(&mut self, msg: Envelope<T>) -> Token
+
+### RawRecvChannel
+
+RecvChannel expects that each message received has the same type, it does not 
+work for arbitrary messages. Sometimes it is useful to have a single channel
+for different message types, i.e. interrupt notifications and user requests
+for some server. In this case the RawRecvChannel should be used.
+Since the type of message isn't known in advance it has the slighly different 
+API.
+        const fn new(id: u32) -> Self
+        fn try_pop(&self, Token) -> Result<HeaderPtr, Token>
+        async fn pop(&self, Token) -> HeaderPtr
+
+Instead of Envelope<T> it returns HeaderPtr - a wrapped pointer to unknown
+message payload. This type has additional functions allowing application 
+to check the type at runtime and then convert the pointer into specific
+Envelope.
+
+        fn free(self) -> Token
+        unsafe fn read<T>(&self) -> T
+        unsafe fn convert<T>(self) -> Envelope<T>
+
+The read function reads the payload as the specified type.
 
